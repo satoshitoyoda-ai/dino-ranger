@@ -1,4 +1,4 @@
-# Dino Ranger: Jungle Run — v3.1 (3D)
+# Dino Ranger: Jungle Run — v3.2 (3D)
 
 An original dinosaur ride game in the arcade light-gun style, now in real 3D. Ride an open jeep along a winding, hilly jungle track through three missions. Dinosaurs walk, sprint and charge out of the jungle, and some leap or lunge at the jeep and bite (the screen shakes and the jeep bumps). You **tap to fire darts** from a big first-person rifle. Each mission ends with a giant: Triceratops, Spinosaurus, then T. rex.
 
@@ -22,7 +22,7 @@ An original dinosaur ride game in the arcade light-gun style, now in real 3D. Ri
 - **Head shots count double** (and give a bonus star). Small dinosaurs need 1 dart, Triceratops and Stegosaurus 3 (2 on Easy), the giants 8–16.
 - Holding a finger down keeps firing and the rifle follows the finger.
 - Every dinosaur moves at its own speed: raptors sprint (up to ~9 m/s), Triceratops trot or charge, Stegosaurus plod, Pteranodons dive along the road.
-- There is no losing. A dinosaur that reaches the jeep bites or rams it, then runs past.
+- **Jeep energy (v3.2, Satoshi's request):** each bite drains the green energy bar under the score (Easy 9, Normal 15; giants 14 or 22; a Pteranodon skimming the jeep takes a little). At zero it's **Game Over**: ▶ retries the same mission and doesn't use up a daily mission. Gentle mode has no bites, so no damage. Grown-ups can switch it off (*Jeep energy & game over*). The energy bar refills at the start of each mission.
 - Fallen dinosaurs go into the **Field Guide** (binoculars button). Its 3D portraits show the species you have met; tap a card to hear its call and name.
 
 ## What's inside

@@ -6,19 +6,19 @@ import { clamp, lerp, smooth, fbm, vnoise, rng, canvasTex, detailTexture, radial
 
 export const ENV = [
   { // Fern Valley: sunny jungle valley
-    seed: 11, len: 300, curve: [[9, 52, 0.3], [4, 21, 1.4]], hills: [[2.4, 38, 0], [1.1, 16, 2]],
+    seed: 11, len: 420, curve: [[9, 52, 0.3], [4, 21, 1.4]], hills: [[2.4, 38, 0], [1.1, 16, 2]],
     skyTop: 0x5f97c8, skyHor: 0xd9e6d6, fog: 0xc9d8c4, fogNear: 22, fogFar: 175, sunDir: [0.5, 0.75, 0.35], sunCol: 0xfff1d6, sunI: 3.0,
     hemiSky: 0xcfe2ff, hemiGround: 0x4a5a2a, hemiI: 1.15, grass: [0x55702f, 0x7e9a45], dirt: 0x8b6b45, rock: 0x7d7a6e, leaf: [0x2f5a26, 0x4f8034], bark: 0x5a4330, mtn: 0x8fa79c,
     veg: { broad: 240, palm: 170, fern: 800, grass: 1300, rock: 110, dead: 0 }, motes: 0xfff6c8,
   },
   { // River Gorge: river on the left, cliffs on the right
-    seed: 23, len: 310, curve: [[7, 60, 0.5], [3, 26, 2.0]], hills: [[0.9, 34, 1]], river: true, waterY: -1.5,
+    seed: 23, len: 430, curve: [[7, 60, 0.5], [3, 26, 2.0]], hills: [[0.9, 34, 1]], river: true, waterY: -1.5,
     skyTop: 0x4f8fc4, skyHor: 0xdfe9e8, fog: 0xc8d8dc, fogNear: 25, fogFar: 195, sunDir: [-0.45, 0.7, 0.2], sunCol: 0xfff3dc, sunI: 3.0,
     hemiSky: 0xcfe6ff, hemiGround: 0x52603a, hemiI: 1.1, grass: [0x5a7231, 0x86a050], dirt: 0x94754e, rock: 0x9a8a72, leaf: [0x35602e, 0x52813a], bark: 0x5a4330, mtn: 0x8b9ea6,
     veg: { broad: 150, palm: 170, fern: 600, grass: 1100, rock: 220, dead: 0 }, motes: 0xffffff,
   },
   { // Volcano Ridge: dusk, ash, smoking volcano ahead
-    seed: 37, len: 320, curve: [[10, 48, 2.0], [5, 20, 0.4]], hills: [[3.2, 44, 0.5], [1.3, 18, 1]], volcano: true,
+    seed: 37, len: 440, curve: [[10, 48, 2.0], [5, 20, 0.4]], hills: [[3.2, 44, 0.5], [1.3, 18, 1]], volcano: true,
     skyTop: 0x3c3458, skyHor: 0xf09a5c, fog: 0xc98a68, fogNear: 14, fogFar: 150, sunDir: [-0.6, 0.22, -0.75], sunCol: 0xffb070, sunI: 2.4,
     hemiSky: 0xffc39a, hemiGround: 0x4a4030, hemiI: 1.35, grass: [0x4a5c28, 0x6e7c3e], dirt: 0x7a5e42, rock: 0x5e5654, leaf: [0x2e4a26, 0x45683a], bark: 0x3e3226, mtn: 0x6e5a66,
     veg: { broad: 90, palm: 110, fern: 450, grass: 900, rock: 200, dead: 110 }, motes: 0xff9a50,
@@ -256,7 +256,7 @@ export class World {
     m.customProgramCacheKey = () => 'sway' + amt; return m;
   }
   buildVeg() {
-    const E = this.env, V = this.vegGeoms(), leafT = this.leafTex(), r = rng(E.seed * 7), q = this.quality;
+    const E = this.env, V = this.vegGeoms(), leafT = this.leafTex(), r = rng(E.seed * 7), q = this.quality * E.len / 310;
     const bark = new THREE.MeshStandardMaterial({ color: E.bark, roughness: 0.95, map: this.detail });
     const leafA = new THREE.Color(E.leaf[0]), leafB = new THREE.Color(E.leaf[1]);
     const crownM = this.swayMat(new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.85, map: this.detail }), 0.006);

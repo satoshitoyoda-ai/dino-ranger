@@ -327,10 +327,10 @@ export class Dino {
     this.acts = {
       idle: A(cc.idle || findClip(clips, /idle/i)), walk: A(cc.walk || findClip(clips, /walk/i)), run: A(cc.run || findClip(clips, /run|gallop/i)),
       attack: A(cc.attack || findClip(clips, /attack|bite/i)), roar: A(cc.roar || findClip(clips, /roar|howl|yell/i) || findClip(clips, /attack/i)), death: A(cc.death || findClip(clips, /death|die/i)),
-      hit: A(cc.hit || findClip(clips, /hit|hurt|damage/i)),
+      hit: A(cc.hit || findClip(clips, /hit|hurt|damage/i)), leap: A(cc.leap || findClip(clips, /jump|leap/i)),
     };
     if (this.acts.death) { this.acts.death.setLoop(THREE.LoopOnce); this.acts.death.clampWhenFinished = true; }
-    for (const k2 of ['attack', 'roar', 'hit']) if (this.acts[k2]) this.acts[k2].setLoop(THREE.LoopOnce);
+    for (const k2 of ['attack', 'roar', 'hit', 'leap']) if (this.acts[k2]) this.acts[k2].setLoop(THREE.LoopOnce);
     this.cur = null; this.playAct('idle');
     obj.traverse(o => { if (o.isBone && /head/i.test(o.name) && !this.headBone) this.headBone = o; });
     this.dims = { len: target, height: size.y * k, hipY: size.y * k * 0.45, halfW: Math.min(size.x, size.z) * k * 0.4, stride: target * 0.6 };
@@ -408,8 +408,8 @@ export class Dino {
       if (t < 0.15) this.tilt.position.x = Math.sin(t * 60) * 0.05;
     } else {
       this.tilt.rotation.z = Math.sin(this.hitT * 30) * 0.04 * this.flinchDir; this.tilt.position.y = 0;
-      if (this.anim === 'leap') this.tilt.position.y = Math.sin(clamp(this.animT / 0.6, 0, 1) * Math.PI) * 1.1;
-      if (this.anim === 'attack' && this.dims.hipY * this.size < 1.4) this.tilt.position.y = Math.sin(clamp(this.animT / 0.8, 0, 1) * Math.PI) * 0.45;
+      if (this.anim === 'leap' && !this.gl) this.tilt.position.y = Math.sin(clamp(this.animT / 0.6, 0, 1) * Math.PI) * 1.1;
+      if (this.anim === 'attack' && !this.gl && this.dims.hipY * this.size < 1.4) this.tilt.position.y = Math.sin(clamp(this.animT / 0.8, 0, 1) * Math.PI) * 0.45;
     }
   }
   poseFlyer(dt) {

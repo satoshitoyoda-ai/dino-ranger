@@ -139,6 +139,14 @@
   <button id="bHome2" class="btn slate lg pulse" aria-label="Home"><svg viewBox="0 0 100 100"><path d="M50 16 L88 50 H76 V84 H24 V50 H12 Z" fill="#fff" stroke="#2E2A1E" stroke-width="5" stroke-linejoin="round"/></svg></button>
 </div>
 
+<div id="over" class="screen dim">
+  <div class="card"><div class="bigemoji">🚙💥🦖</div><div class="lname" style="font-size:44px">Game Over</div></div>
+  <div class="row">
+    <button id="bHome4" class="btn slate md" aria-label="Home"><svg viewBox="0 0 100 100"><path d="M50 16 L88 50 H76 V84 H24 V50 H12 Z" fill="#fff" stroke="#2E2A1E" stroke-width="5" stroke-linejoin="round"/></svg></button>
+    <button id="bRetry" class="btn xl pulse" aria-label="Try again"><svg viewBox="0 0 100 100"><path d="M34 20 L82 50 L34 80 Z" fill="#fff" stroke="#2E2A1E" stroke-width="6" stroke-linejoin="round"/></svg></button>
+  </div>
+</div>
+
 <div id="rest" class="screen dim">
   <div class="card"><div class="bigemoji">🌙🦕💤</div><div class="lname" style="font-size:36px">The dinosaurs are sleeping.</div></div>
   <button id="bHome3" class="btn slate lg" aria-label="Home"><svg viewBox="0 0 100 100"><path d="M50 16 L88 50 H76 V84 H24 V50 H12 Z" fill="#fff" stroke="#2E2A1E" stroke-width="5" stroke-linejoin="round"/></svg></button>
@@ -156,6 +164,7 @@
     <label>Intensity <select id="pInt"><option value="action">Action — dinosaurs charge and bite at the jeep, big roars</option><option value="gentle">Gentle — dinosaurs keep their distance</option></select></label>
     <label>Blood splash on hits <input type="checkbox" id="pBlood"></label>
     <label>Difficulty <select id="pDiff"><option value="easy">Easy (age 3–5)</option><option value="normal">Normal (age 5+)</option></select></label>
+    <label>Jeep energy &amp; game over (bites drain the bar) <input type="checkbox" id="pEnergy"></label>
     <label>Sound effects <input type="checkbox" id="pSound"></label>
     <label>Music <input type="checkbox" id="pMusic"></label>
     <label>Spoken ranger radio <input type="checkbox" id="pVoice"></label>
@@ -169,6 +178,7 @@
   </div>
 </div>
 
+<div id="errBox" style="display:none;position:fixed;left:8px;bottom:8px;right:8px;z-index:50;background:rgba(120,0,0,.85);color:#fff;font:14px system-ui;padding:8px 12px;border-radius:8px"></div>
 <div id="rotate"><div class="ipad"></div><div>↻</div></div>
 
 <script>

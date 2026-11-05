@@ -8,11 +8,11 @@ import { Cockpit, makeDart } from './rifle.js';
 import { FX } from './fx.js';
 import { audioBind, audioInit, sfx, cry, say, musicStart, musicStop, audioTick, ambOff, AC } from './audio.js';
 
-export const VERSION = '3.1.0';
+export const VERSION = '3.2.0';
 
 /* ================= settings (this device only) ================= */
 const SKEY = 'dinoRanger.v1';
-const DEF = { sound: true, music: true, voice: true, diff: 'easy', intensity: 'action', blood: true, ridesPerDay: 2, name: '', today: '', rides: 0, seen: {}, totalStars: 0 };
+const DEF = { sound: true, music: true, voice: true, diff: 'easy', intensity: 'action', blood: true, energy: true, ridesPerDay: 2, name: '', today: '', rides: 0, seen: {}, totalStars: 0 };
 const S = load();
 function load() { try { return Object.assign({}, DEF, JSON.parse(localStorage.getItem(SKEY) || '{}')); } catch (e) { return Object.assign({}, DEF); } }
 function save() { try { localStorage.setItem(SKEY, JSON.stringify(S)); } catch (e) {} }
@@ -37,7 +37,7 @@ const LEVELS = [
     boss: 'rex', bossSize: 1, bossHp: [12, 16], bossRoll: 1.8, bossSay: "It's the T. rex! Fire the darts!", kinds: { raptor: 3, ptera: 1, stego: 1, trike: 1 }, root: 40 },
 ];
 const GUIDE = ['raptor', 'trike', 'stego', 'ptera', 'spino', 'rex'];
-const RIDE = 4.4;
+const RIDE = 6.5;
 audioBind(S, ACT, () => (LEVELS[G ? G.level : 0] || LEVELS[0]).root);
 
 /* ================= renderer, camera, world ================= */
@@ -48,8 +48,8 @@ const renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true, powerPre
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;
-let PR = Math.min(window.devicePixelRatio || 1, isTouch ? 1.5 : 1.75);
-const world = new World(renderer); world.setShadowSize(isTouch ? 1024 : 2048);
+let PR = Math.min(window.devicePixelRatio || 1, isTouch ? 1.3 : 1.75);
+const world = new World(renderer); world.setShadowSize(isTouch ? 1024 : 2048); if (isTouch) world.quality = 0.75;
 const scene = world.scene;
 const camera = new THREE.PerspectiveCamera(60, 1, 0.05, 1400); scene.add(camera);
 const cockpit = new Cockpit(camera);
@@ -185,6 +185,7 @@ function turnTo(d, tx, tz, rate, dt) { const want = Math.atan2(tx - d.pos.x, tz 
 function stepFwd(d, sp, dt) { d.speed = sp; d.pos.x += Math.sin(d.heading) * sp * dt; d.pos.z += Math.cos(d.heading) * sp * dt; }
 function biteHit(d, big) {
   if (!ACT()) return;
+  hurt(big ? (S.diff === 'easy' ? 14 : 22) : (S.diff === 'easy' ? 9 : 15));
   const side = Math.sign(jeepR.dot(tmp.copy(d.pos).sub(jeepPos))) || 1;
   G.shake = Math.max(G.shake, big ? 0.75 : 0.5); G.flash = 0.35; G.red = BLOOD() ? 0.35 : 0;
   G.bumpV.addScaledVector(jeepR, -side * (big ? 0.9 : 0.6)).addScaledVector(UP, big ? 0.6 : 0.35);
@@ -248,7 +249,7 @@ function updFlyer(d, dt, dist, ahead) {
     d.pos.y += ((gy + targetAlt) - d.pos.y) * Math.min(1, dt * 1.5);
     d.bank = clamp((d.lastH != null ? (d.heading - d.lastH) / dt : 0) * -0.4, -0.6, 0.6); d.lastH = d.heading;
     d.setAnim(dist < 20 && dist > 6 ? 'glide' : 'fly');
-    if (dist < 5) { d.mode = 'pass'; d.t = 0; cry('squawk'); if (act) { G.shake = Math.max(G.shake, 0.18); } }
+    if (dist < 5) { d.mode = 'pass'; d.t = 0; cry('squawk'); if (act) { G.shake = Math.max(G.shake, 0.18); if (Math.abs(d.lane) < 2.5) hurt(S.diff === 'easy' ? 5 : 8); } }
   } else if (d.mode === 'pass') { stepFwd(d, d.vmax, dt); d.pos.y += dt * 4; d.setAnim('fly'); if (d.t > 5) d.mode = 'gone'; }
   if (ahead < -20 || dist > 110) d.mode = 'gone';
 }
@@ -318,8 +319,18 @@ function startLevel(i) {
   $('iEmoji').textContent = lv.emoji; $('iName').textContent = lv.name; dots($('iDots'), i);
   G.state = 'intro'; show('intro'); say(lv.say);
   setTimeout(() => { // build after the card is painted
-    buildLevel(i); G.pointers.clear(); G.phase = 'ride'; G.spawnT = 2.5; G.levelScore = 0; G.aim = { x: W / 2, y: H * 0.45 }; G.introT = 2.4;
+    buildLevel(i); G.pointers.clear(); G.phase = 'ride'; G.spawnT = 2.5; G.levelScore = 0; G.energy = 100; G.aim = { x: W / 2, y: H * 0.45 }; G.introT = 2.4;
   }, 60);
+}
+// jeep energy: bites drain it; at zero the mission is over (grown-ups can switch this off)
+function hurt(n) {
+  if (!S.energy || G.state !== 'play' || G.phase === 'done') return;
+  G.energy = Math.max(0, G.energy - n); G.hurtT = 1;
+  if (G.energy <= 0) gameOver();
+}
+function gameOver() {
+  G.state = 'over'; G.vT = 0; G.pointers.clear(); musicStop(); show('over');
+  say('Oh no! The jeep is out of energy. Tap play to try again, ranger' + nameBit() + '!');
 }
 function beginPlay() { G.state = 'play'; G.vT = RIDE; show(null); musicStart(); }
 function levelClear() {
@@ -348,7 +359,7 @@ function placeJeep(dt) {
 let engT = 0;
 function update(dt) {
   G.t += dt;
-  const live = ['title', 'intro', 'play', 'clear', 'end', 'rest'].includes(G.state);
+  const live = ['title', 'intro', 'play', 'clear', 'end', 'rest', 'over'].includes(G.state);
   if (AC && (engT -= dt) <= 0) { engT = 0.1; audioTick(S.sound && live && !['title', 'end', 'rest'].includes(G.state), G.v / RIDE, S.sound && live); }
   if (!live && G.state !== 'guide' && G.state !== 'parent') return;
   if (!live) { world.update(dt, camera); return; }
@@ -382,7 +393,7 @@ function update(dt) {
   fx.update(dt); world.update(dt, camera);
   for (const s of G.stars) { s.t += dt; if (s.t >= s.dur && !s.done) { s.done = true; G.score++; G.levelScore++; G.hudBump = 1; sfx.ding(); } }
   G.stars = G.stars.filter(s => !s.done); for (const p of G.pops) p.t += dt; G.pops = G.pops.filter(p => p.t < 0.9);
-  G.shake = Math.max(0, G.shake - dt); G.flash = Math.max(0, G.flash - dt * 2); G.red = Math.max(0, G.red - dt * 1.5); G.hudBump = Math.max(0, G.hudBump - dt * 3);
+  G.shake = Math.max(0, G.shake - dt); G.flash = Math.max(0, G.flash - dt * 2); G.red = Math.max(0, G.red - dt * 1.5); G.hudBump = Math.max(0, G.hudBump - dt * 3); G.hurtT = Math.max(0, (G.hurtT || 0) - dt * 2);
 }
 
 /* ================= HUD (2D overlay) ================= */
@@ -405,6 +416,11 @@ function drawHUD() {
   hx.fillStyle = 'rgba(243,235,211,0.92)'; rr(14, 14, 176, 78, 18); hx.fill(); hx.lineWidth = 4; hx.strokeStyle = '#2E2A1E'; hx.stroke();
   hx.save(); hx.translate(60, 53); const bb = 1 + G.hudBump * 0.35; hx.scale(bb, bb); starShape(0, 0, 26, '#F2C14E', '#2E2A1E'); hx.restore();
   hx.fillStyle = '#2E2A1E'; hx.font = '900 44px system-ui, sans-serif'; hx.textBaseline = 'middle'; hx.fillText(String(G.score), 98, 55);
+  if (S.energy) { const e = clamp(G.energy / 100, 0, 1), sh = G.hurtT > 0 ? Math.sin(G.t * 60) * 4 * G.hurtT : 0;
+    hx.fillStyle = 'rgba(243,235,211,0.92)'; rr(14 + sh, 100, 176, 34, 12); hx.fill(); hx.lineWidth = 3; hx.strokeStyle = '#2E2A1E'; hx.stroke();
+    hx.font = '22px system-ui, sans-serif'; hx.fillText('🚙', 22 + sh, 118);
+    hx.fillStyle = '#5a4a34'; rr(56 + sh, 108, 124, 18, 8); hx.fill();
+    hx.fillStyle = e > 0.5 ? '#6DBE45' : e > 0.25 ? '#E8B83A' : '#D9472B'; if (e > 0) { rr(56 + sh, 108, Math.max(14, 124 * e), 18, 8); hx.fill(); } }
   const cx = W / 2, y = 52;
   if (G.phase === 'ride' && world.env) {
     const w = Math.min(420, W * 0.36), u = clamp(G.s / world.env.len, 0, 1);
@@ -423,15 +439,19 @@ function drawHUD() {
 
 /* ================= loop & adaptive quality ================= */
 let last = performance.now();
+let loopErr = null;
 function loop(now) {
+  requestAnimationFrame(loop);
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
+  try { frame(dt); } catch (e) { if (!loopErr) { loopErr = e; console.error(e); const w = $('errBox'); w.textContent = 'Error (please screenshot): ' + (e && e.message) + ' @ ' + String(e && e.stack || '').split(String.fromCharCode(10)).slice(0, 2).join(' '); w.style.display = 'block'; } }
+}
+function frame(dt) {
   if (!G.hold) update(dt);
   if (G.state !== 'guide') renderer.render(scene, camera);
   drawHUD();
   // keep ~60 fps on the iPad: drop resolution step by step if frames are slow
   G.fpsT += dt; G.fpsN++;
-  if (G.fpsT > 2) { G.fps = G.fpsN / G.fpsT; G.fpsT = 0; G.fpsN = 0; if (G.state === 'play' && G.fps < 48 && PR > 0.85) { PR = Math.max(0.85, PR - 0.2); resize(); } }
-  requestAnimationFrame(loop);
+  if (G.fpsT > 2) { G.fps = G.fpsN / G.fpsT; G.fpsT = 0; G.fpsN = 0; if (G.state === 'play' && G.fps < 48 && PR > 0.75) { PR = Math.max(0.75, PR - 0.15); resize(); } }
 }
 
 /* ================= input ================= */
@@ -450,6 +470,8 @@ document.addEventListener('touchmove', e => { if (!e.target.closest('#guide, #pa
 function tapBtn(id, fn) { $(id).addEventListener('click', e => { e.preventDefault(); audioInit(); sfx.ui(); fn(); }); }
 tapBtn('bPlay', startRide); tapBtn('bPause', pauseGame); tapBtn('bResume', resumeGame);
 tapBtn('bNext', () => startLevel(G.level + 1));
+tapBtn('bRetry', () => { G.score -= G.levelScore; startLevel(G.level); });
+tapBtn('bHome4', toTitle);
 tapBtn('bHome1', toTitle); tapBtn('bHome2', toTitle); tapBtn('bHome3', toTitle);
 tapBtn('bGuide', openGuide);
 tapBtn('fBack', () => { G.state = 'title'; show('title'); });
@@ -497,7 +519,7 @@ $('bGear').addEventListener('pointerdown', e => { e.preventDefault(); gearStart 
 ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => $('bGear').addEventListener(ev, () => { if (gearT) gearCancel(); }));
 function openParent() {
   G.state = 'parent';
-  $('pInt').value = S.intensity; $('pBlood').checked = S.blood !== false; $('pDiff').value = S.diff; $('pSound').checked = S.sound; $('pMusic').checked = S.music; $('pVoice').checked = S.voice; $('pRides').value = String(S.ridesPerDay); $('pName').value = S.name;
+  $('pInt').value = S.intensity; $('pBlood').checked = S.blood !== false; $('pDiff').value = S.diff; $('pSound').checked = S.sound; $('pMusic').checked = S.music; $('pVoice').checked = S.voice; $('pEnergy').checked = S.energy !== false; $('pRides').value = String(S.ridesPerDay); $('pName').value = S.name;
   const lim = +S.ridesPerDay;
   $('pStat').textContent = 'Missions today: ' + ridesToday() + (lim ? ' of ' + lim : '') + ' · Stars so far: ' + S.totalStars + ' · Species found: ' + GUIDE.filter(k => S.seen[k]).length + ' of ' + GUIDE.length;
   $('pVer').textContent = 'Dino Ranger: Jungle Run v' + VERSION + ' · 3D' + (Object.keys(PACK).length ? ' · models: ' + Object.keys(PACK).join(', ') : ' · built-in models') + ' · ' + Math.round(G.fps) + ' fps';
@@ -505,7 +527,7 @@ function openParent() {
 }
 $('pReset').addEventListener('click', () => { S.rides = 0; S.today = todayStr(); save(); openParent(); });
 $('pDone').addEventListener('click', () => {
-  S.intensity = $('pInt').value; S.blood = $('pBlood').checked; S.diff = $('pDiff').value; S.sound = $('pSound').checked; S.music = $('pMusic').checked; S.voice = $('pVoice').checked; S.ridesPerDay = +$('pRides').value; S.name = $('pName').value.trim().slice(0, 20);
+  S.intensity = $('pInt').value; S.blood = $('pBlood').checked; S.diff = $('pDiff').value; S.sound = $('pSound').checked; S.music = $('pMusic').checked; S.voice = $('pVoice').checked; S.energy = $('pEnergy').checked; S.ridesPerDay = +$('pRides').value; S.name = $('pName').value.trim().slice(0, 20);
   save(); G.state = 'title'; show('title');
 });
 
