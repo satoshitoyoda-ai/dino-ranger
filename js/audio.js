@@ -5,7 +5,7 @@ let S = null, ACTf = () => true, rootf = () => 45;
 export function audioBind(settings, act, root) { S = settings; ACTf = act; rootf = root; }
 
 export let AC = null;
-let master, sfxG, musG, ambG, revIn, NB = null, eng = null;
+let master, sfxG, musG, ambG, revIn, NB = null, eng = null, rainG = null;
 function impulse(sec) { const n = Math.floor(AC.sampleRate * sec), b = AC.createBuffer(2, n, AC.sampleRate); for (let c = 0; c < 2; c++) { const a = b.getChannelData(c); for (let i = 0; i < n; i++) a[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 2.6); } return b; }
 function noiseBuf() { if (!NB) { NB = AC.createBuffer(1, AC.sampleRate, AC.sampleRate); const a = NB.getChannelData(0); for (let i = 0; i < a.length; i++) a[i] = Math.random() * 2 - 1; } return NB; }
 export function audioInit() {
@@ -27,7 +27,11 @@ export function audioInit() {
   o1.connect(f); o2.connect(f); f.connect(g); g.connect(sfxG); o1.start(); o2.start(); eng = { o1, o2, g };
   const n = AC.createBufferSource(); n.buffer = noiseBuf(); n.loop = true; const nf = AC.createBiquadFilter(); nf.type = 'bandpass'; nf.frequency.value = 3200; nf.Q.value = 0.6;
   const ng = AC.createGain(); ng.gain.value = 0.02; n.connect(nf); nf.connect(ng); ng.connect(ambG); n.start();
+  // rain hiss (volume follows the weather)
+  const rn = AC.createBufferSource(); rn.buffer = noiseBuf(); rn.loop = true; const rf = AC.createBiquadFilter(); rf.type = 'lowpass'; rf.frequency.value = 2600; const rh = AC.createBiquadFilter(); rh.type = 'highpass'; rh.frequency.value = 300;
+  rainG = AC.createGain(); rainG.gain.value = 0.0001; rn.connect(rf); rf.connect(rh); rh.connect(rainG); rainG.connect(master); rn.start(AC.currentTime + 0.37);
 }
+export function setRain(v) { if (rainG) rainG.gain.setTargetAtTime(S.sound ? 0.0001 + v * 0.16 : 0.0001, AC.currentTime, 0.5); }
 export function tone(f, dur, type = 'sine', vol = 0.3, f2 = null, delay = 0, dest) {
   if (!AC || !S.sound) return;
   const t = AC.currentTime + delay, o = AC.createOscillator(), g = AC.createGain();
@@ -64,6 +68,11 @@ function roar(sz, vol) {
 }
 let lastDing = 0;
 export const sfx = {
+  rapid() { tone(220, 0.07, 'square', 0.12, 80); noise(0.05, 0.16, 2600, 0, 'highpass', 0.7); },
+  spread() { tone(110, 0.25, 'sine', 0.55, 35); noise(0.22, 0.4, 900, 0, 'lowpass', 0.7); noise(0.12, 0.2, 3000, 0.01, 'highpass', 0.5); },
+  launch() { tone(90, 0.3, 'sine', 0.45, 40); noise(0.35, 0.3, 500, 0, 'bandpass', 0.8); },
+  boom() { tone(48, 1.1, 'sine', 0.8, 22); noise(1.2, 0.55, 220, 0, 'lowpass', 0.7); noise(0.25, 0.3, 1800, 0, 'bandpass', 0.6); },
+  thunder() { const d = 0.3 + Math.random() * 0.6; noise(2.6, 0.5, 140, d, 'lowpass', 0.6); tone(38, 2.2, 'sine', 0.35, 26, d); noise(0.4, 0.25, 900, d, 'bandpass', 0.5); },
   dart() { tone(150, 0.14, 'sine', 0.4, 45); noise(0.09, 0.22, 2000, 0, 'highpass', 0.7); noise(0.3, 0.05, 5000, 0.04, 'highpass', 0.5); },
   thunk(head) { tone(head ? 140 : 105, 0.18, 'sine', 0.45, 40); noise(0.08, 0.22, 450, 0, 'lowpass', 1); if (S.blood !== false) noise(0.14, 0.12, 800, 0.02, 'bandpass', 2.5); if (head) tone(880, 0.08, 'triangle', 0.06, null, 0.03); },
   miss() { tone(90, 0.1, 'sine', 0.15, 50); noise(0.14, 0.12, 400, 0, 'lowpass', 0.7); },

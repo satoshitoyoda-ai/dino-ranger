@@ -1,4 +1,4 @@
-# Dino Ranger: Jungle Run — v3.2 (3D)
+# Dino Ranger: Jungle Run — v3.4 (3D)
 
 An original dinosaur ride game in the arcade light-gun style, now in real 3D. Ride an open jeep along a winding, hilly jungle track through three missions. Dinosaurs walk, sprint and charge out of the jungle, and some leap or lunge at the jeep and bite (the screen shakes and the jeep bumps). You **tap to fire darts** from a big first-person rifle. Each mission ends with a giant: Triceratops, Spinosaurus, then T. rex.
 
@@ -20,7 +20,16 @@ An original dinosaur ride game in the arcade light-gun style, now in real 3D. Ri
 ## How it plays
 - **Aiming is exact.** The dart goes where you tap: the game casts a ray from the tap into the 3D scene and hits the dinosaur's actual body. *Normal* has no aim assist. *Easy* only adds a small helper ring (34 px) around a tap that just misses. v2.1's forgiving 100–150 px assist is gone.
 - **Head shots count double** (and give a bonus star). Small dinosaurs need 1 dart, Triceratops and Stegosaurus 3 (2 on Easy), the giants 8–16.
-- Holding a finger down keeps firing and the rifle follows the finger.
+- Holding a finger down keeps firing and the gun follows the finger.
+- **Six missions (v3.4)** in two rides of three. Each ride plays three missions; the next ride plays the other three, then it starts over.
+  - Ride A: Fern Valley (giant Triceratops), River Gorge (Spinosaurus), Volcano Ridge (T. rex).
+  - Ride B: Misty Marsh (causeway through swamp, giant Stegosaurus), Red Canyon (red cliffs and badlands, Alpha Raptor), Sunset Plains (golden grassland with big herds, King Rex).
+- **Four weapons (v3.3)** — the round buttons bottom-left switch them any time:
+  - 🎯 **Dart rifle:** one accurate dart (the default).
+  - ⚡ **Rapid darts:** fast stream of small darts, each weaker.
+  - ✴️ **Spread gun:** a double barrel firing 6 pellets in a cone. Strong up close, slow to reload.
+  - 💥 **Sleepy cannon:** a slow, heavy shell that explodes (fireball, smoke, shake) and hits every dinosaur within about 5 m.
+- **Weather (v3.3)** — each mission starts sunny, rainy, foggy or stormy and usually changes once on the way, with a ranger-radio warning. Rain brings streaks, a rain sound and wet ground. Fog cuts visibility to about 50 m. Thunderstorms add lightning flashes and thunder. Grown-ups can fix the weather in the menu (*Weather*).
 - Every dinosaur moves at its own speed: raptors sprint (up to ~9 m/s), Triceratops trot or charge, Stegosaurus plod, Pteranodons dive along the road.
 - **Jeep energy (v3.2, Satoshi's request):** each bite drains the green energy bar under the score (Easy 9, Normal 15; giants 14 or 22; a Pteranodon skimming the jeep takes a little). At zero it's **Game Over**: ▶ retries the same mission and doesn't use up a daily mission. Gentle mode has no bites, so no damage. Grown-ups can switch it off (*Jeep energy & game over*). The energy bar refills at the start of each mission.
 - Fallen dinosaurs go into the **Field Guide** (binoculars button). Its 3D portraits show the species you have met; tap a card to hear its call and name.

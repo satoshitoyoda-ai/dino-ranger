@@ -37,7 +37,10 @@ export class Cockpit {
     // gun pivot (rotates to aim). Points along -Z.
     const gun = this.gun = new THREE.Group(); gun.position.set(0.15, -0.29, -0.26); camera.add(gun);
     const body = this.gunBody = new THREE.Group(); gun.add(body); this.cant = -0.32;
-    const add = (geo, mat, x, y, z, rx = 0, ry = 0, rz = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); body.add(m); return m; };
+    let tgt = body;
+    const add = (geo, mat, x, y, z, rx = 0, ry = 0, rz = 0) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); tgt.add(m); return m; };
+    const models = this.models = {}; const grp = k => { tgt = models[k] = new THREE.Group(); body.add(tgt); return tgt; };
+    grp('rifle');
     // stock: extruded side profile
     const st = new THREE.Shape(); st.moveTo(0.02, 0.0); st.lineTo(0.30, -0.035); st.lineTo(0.34, -0.03); st.lineTo(0.35, -0.12); st.lineTo(0.30, -0.13); st.lineTo(0.12, -0.07); st.lineTo(0.06, -0.12); st.lineTo(0.02, -0.12); st.lineTo(0.04, -0.05); st.lineTo(0.0, -0.04); st.closePath();
     const sg = new THREE.ExtrudeGeometry(st, { depth: 0.05, bevelEnabled: true, bevelSize: 0.008, bevelThickness: 0.008, bevelSegments: 2 }); sg.translate(0, 0, -0.025); sg.rotateY(-Math.PI / 2);
@@ -54,6 +57,34 @@ export class Cockpit {
     for (const z of [-0.06, -0.18]) add(new THREE.BoxGeometry(0.02, 0.04, 0.02), metal, 0, 0.06, z);
     add(new THREE.BoxGeometry(0.03, 0.09, 0.04), metal, 0, -0.06, -0.02, 0.25);                             // grip
     this.led = add(new THREE.SphereGeometry(0.008, 8, 6), new THREE.MeshBasicMaterial({ color: 0xff3b2f }), 0.033, 0.03, -0.04);
+    // compact rapid-fire dart gun
+    grp('rapid');
+    add(new THREE.BoxGeometry(0.07, 0.09, 0.34), metal, 0, 0.015, -0.12);
+    add(new THREE.CylinderGeometry(0.026, 0.026, 0.3, 14), metal, 0, 0.03, -0.43, Math.PI / 2);
+    add(new THREE.CylinderGeometry(0.014, 0.014, 0.1, 10), metalL, 0, 0.03, -0.62, Math.PI / 2);
+    add(new THREE.BoxGeometry(0.036, 0.17, 0.055), orange, 0, -0.1, -0.16, -0.15);
+    add(new THREE.BoxGeometry(0.03, 0.09, 0.035), metal, 0, -0.07, -0.36, 0.2);
+    add(new THREE.BoxGeometry(0.04, 0.035, 0.07), metal, 0, 0.08, -0.12);
+    add(new THREE.CircleGeometry(0.014, 12), new THREE.MeshBasicMaterial({ color: 0xff4030 }), 0, 0.08, -0.156);
+    for (const x of [-0.025, 0.025]) add(new THREE.CylinderGeometry(0.007, 0.007, 0.3, 6), metalL, x, -0.02, 0.15, Math.PI / 2 - 0.15);
+    // double-barrel spread gun
+    grp('spread');
+    add(sg, wood, 0, 0.01, 0.0);
+    add(new THREE.BoxGeometry(0.07, 0.08, 0.16), metalL, 0, 0.015, -0.06);
+    for (const x of [-0.024, 0.024]) add(new THREE.CylinderGeometry(0.022, 0.022, 0.62, 14), metal, x, 0.03, -0.45, Math.PI / 2);
+    add(new THREE.BoxGeometry(0.07, 0.045, 0.3), wood, 0, -0.012, -0.32);
+    for (const x of [-0.024, 0.024]) add(new THREE.CylinderGeometry(0.024, 0.024, 0.02, 14), orange, x, 0.03, -0.77, Math.PI / 2);
+    // big sleepy-cannon (launcher)
+    grp('cannon');
+    const olive = new THREE.MeshStandardMaterial({ color: 0x55603a, roughness: 0.6, metalness: 0.2 });
+    add(new THREE.CylinderGeometry(0.065, 0.065, 0.95, 18), olive, 0.0, 0.05, -0.32, Math.PI / 2);
+    add(new THREE.CylinderGeometry(0.085, 0.068, 0.12, 18), olive, 0.0, 0.05, -0.83, Math.PI / 2);
+    add(new THREE.CylinderGeometry(0.068, 0.068, 0.05, 18), orange, 0.0, 0.05, -0.62, Math.PI / 2);
+    add(new THREE.CylinderGeometry(0.07, 0.07, 0.06, 18), metal, 0.0, 0.05, 0.14, Math.PI / 2);
+    add(new THREE.BoxGeometry(0.03, 0.1, 0.04), metal, 0, -0.04, -0.05, 0.2);
+    add(new THREE.BoxGeometry(0.03, 0.1, 0.04), metal, 0, -0.04, -0.4, 0.2);
+    add(new THREE.BoxGeometry(0.04, 0.05, 0.08), metal, 0.075, 0.08, -0.25);
+    tgt = body;
     // gloves + sleeves
     const g1 = add(new THREE.SphereGeometry(0.05, 14, 10), glove, 0.0, -0.075, -0.03); g1.scale.set(0.9, 0.8, 1.3);
     const g2 = add(new THREE.SphereGeometry(0.05, 14, 10), glove, -0.01, -0.05, -0.38); g2.scale.set(1.0, 0.75, 1.5);
@@ -89,12 +120,18 @@ export class Cockpit {
     const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, -1), target.normalize());
     this.gun.quaternion.slerp(q, Math.min(1, dt * 20));
   }
+  setWeapon(k) {
+    for (const n in this.models) this.models[n].visible = n === k;
+    const z = { rifle: -0.9, rapid: -0.68, spread: -0.8, cannon: -0.9 }[k] || -0.9, y = k === 'cannon' ? 0.05 : 0.03;
+    this.muzzle.position.set(0, y, z); this.flash.position.set(0, y, z - 0.05); this.light.position.set(0, y + 0.02, z - 0.1);
+    this.kickAmt = { rifle: 1, rapid: 0.45, spread: 1.4, cannon: 1.8 }[k] || 1; this.flashSize = { rifle: 1, rapid: 0.7, spread: 1.5, cannon: 2.2 }[k] || 1;
+  }
   fire() { this.kick = 1; this.flashT = 0.07; this.flash.material.rotation = Math.random() * 6; }
   update(dt) {
     this.kick = Math.max(0, this.kick - dt * 7); this.flashT = Math.max(0, this.flashT - dt);
     const k = this.kick * this.kick;
-    this.gunBody.position.set(0, k * 0.012, k * 0.07); this.gunBody.rotation.set(k * 0.12, 0, this.cant);
-    this.flash.material.opacity = this.flashT > 0 ? 1 : 0; const s = 0.2 + Math.random() * 0.15; this.flash.scale.set(s, s, 1);
+    const ka = this.kickAmt || 1; this.gunBody.position.set(0, k * 0.012 * ka, k * 0.07 * ka); this.gunBody.rotation.set(k * 0.12 * ka, 0, this.cant);
+    this.flash.material.opacity = this.flashT > 0 ? 1 : 0; const s = (0.2 + Math.random() * 0.15) * (this.flashSize || 1); this.flash.scale.set(s, s, 1);
     this.light.intensity = this.flashT > 0 ? 6 : 0;
   }
   muzzleWorld(out) { this.muzzle.updateWorldMatrix(true, false); return out.setFromMatrixPosition(this.muzzle.matrixWorld); }

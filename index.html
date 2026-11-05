@@ -50,6 +50,10 @@
   #bPause { position: fixed; top: calc(14px + env(safe-area-inset-top)); right: calc(14px + env(safe-area-inset-right)); width: 92px; height: 92px; z-index: 4;
     display: none; align-items: center; justify-content: center; background: rgba(243,235,211,.9); border-radius: 50%; border: 4px solid #2E2A1E; }
   #bPause.on { display: flex; }
+  #weapons { position: fixed; left: calc(14px + env(safe-area-inset-left)); bottom: calc(14px + env(safe-area-inset-bottom)); z-index: 4; display: none; flex-direction: column; gap: 12px; }
+  #weapons.on { display: flex; }
+  #weapons button { width: 78px; height: 78px; border-radius: 50%; background: rgba(243,235,211,.82); border: 4px solid #2E2A1E; font-size: 38px; line-height: 1; display: flex; align-items: center; justify-content: center; opacity: .75; }
+  #weapons button.sel { background: #F2C14E; opacity: 1; transform: scale(1.12); box-shadow: 0 0 0 4px rgba(255,255,255,.7); }
   #bPause svg { width: 44%; height: 44%; }
   #bGear { position: fixed; top: calc(14px + env(safe-area-inset-top)); right: calc(14px + env(safe-area-inset-right)); width: 70px; height: 70px; border-radius: 50%;
     background: conic-gradient(#F2C14E calc(var(--p, 0) * 1%), rgba(255,255,255,.4) 0); display: flex; align-items: center; justify-content: center; }
@@ -96,6 +100,7 @@
 <canvas id="hud"></canvas>
 <div id="loading" class="on"><div class="lt">DINO RANGER</div><div class="lb"><i id="loadBar"></i></div><div class="lw" id="loadWarn"></div></div>
 
+<div id="weapons"></div>
 <button id="bPause" aria-label="Pause"><svg viewBox="0 0 100 100"><rect x="22" y="16" width="20" height="68" rx="6" fill="#2E2A1E"/><rect x="58" y="16" width="20" height="68" rx="6" fill="#2E2A1E"/></svg></button>
 
 <div id="title" class="screen">
@@ -165,6 +170,7 @@
     <label>Blood splash on hits <input type="checkbox" id="pBlood"></label>
     <label>Difficulty <select id="pDiff"><option value="easy">Easy (age 3–5)</option><option value="normal">Normal (age 5+)</option></select></label>
     <label>Jeep energy &amp; game over (bites drain the bar) <input type="checkbox" id="pEnergy"></label>
+    <label>Weather <select id="pWeather"><option value="random">Changes during the ride</option><option value="clear">Always sunny</option><option value="rain">Rain</option><option value="fog">Fog</option><option value="storm">Thunderstorm</option></select></label>
     <label>Sound effects <input type="checkbox" id="pSound"></label>
     <label>Music <input type="checkbox" id="pMusic"></label>
     <label>Spoken ranger radio <input type="checkbox" id="pVoice"></label>

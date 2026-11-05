@@ -33,6 +33,11 @@ export class FX {
   dust(at, n = 10, r = 1, col = [0.62, 0.55, 0.42]) {
     for (let i = 0; i < n; i++) this.add({ p: at.clone().add(new THREE.Vector3(rnd(-r, r), rnd(0, 0.3), rnd(-r, r))), v: new THREE.Vector3(rnd(-1, 1), rnd(0.3, 1.2), rnd(-1, 1)).multiplyScalar(r * 0.8), g: -0.2, life: rnd(0.8, 1.6), max: 1.6, s: rnd(0.5, 1.1) * r, c: col, a: 0.5, grow: 0.9 * r });
   }
+  boom(at, k = 1) { // fireball + smoke + dirt
+    for (let i = 0; i < 26; i++) this.add({ p: at.clone(), v: new THREE.Vector3(rnd(-1, 1), rnd(0.2, 1.5), rnd(-1, 1)).multiplyScalar(rnd(2, 6) * k), g: 1.5, life: rnd(0.25, 0.55), max: 0.55, s: rnd(0.4, 0.9) * k, c: [[1, 0.85, 0.4], [1, 0.55, 0.15], [0.95, 0.35, 0.08]][i % 3], a: 0.95, grow: 1.5 * k });
+    for (let i = 0; i < 14; i++) this.add({ p: at.clone().add(new THREE.Vector3(rnd(-0.6, 0.6), rnd(0, 0.5), rnd(-0.6, 0.6))), v: new THREE.Vector3(rnd(-0.8, 0.8), rnd(1, 2.5), rnd(-0.8, 0.8)), g: -0.3, life: rnd(1.2, 2.2), max: 2.2, s: rnd(1, 1.8) * k, c: [0.25, 0.23, 0.22], a: 0.55, grow: 1.2 * k });
+    this.dust(at, 10, 1.4 * k);
+  }
   puff(at, s = 0.25) { this.add({ p: at.clone(), v: new THREE.Vector3(0, 0.3, 0), g: 0, life: 0.3, max: 0.3, s, c: [1, 0.96, 0.85], a: 0.6, grow: 1 }); }
   pool(at, k) { const m = new THREE.Mesh(new THREE.CircleGeometry(1, 24), new THREE.MeshBasicMaterial({ map: this.poolTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, fog: true }));
     m.rotation.x = -Math.PI / 2; m.position.copy(at); m.position.y += 0.06; m.scale.setScalar(0.01); m.userData = { t: 0, k }; this.scene.add(m); this.pools.push(m); }

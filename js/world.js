@@ -23,9 +23,35 @@ export const ENV = [
     hemiSky: 0xffc39a, hemiGround: 0x4a4030, hemiI: 1.35, grass: [0x4a5c28, 0x6e7c3e], dirt: 0x7a5e42, rock: 0x5e5654, leaf: [0x2e4a26, 0x45683a], bark: 0x3e3226, mtn: 0x6e5a66,
     veg: { broad: 90, palm: 110, fern: 450, grass: 900, rock: 200, dead: 110 }, motes: 0xff9a50,
   },
+  { // Misty Marsh: raised causeway through swamp water on both sides
+    seed: 51, len: 430, curve: [[8, 56, 1.1], [3, 23, 0.2]], hills: [[0.5, 40, 0]], swamp: true, waterY: -1.1,
+    skyTop: 0x6f8f98, skyHor: 0xcfd8cc, fog: 0xb7c4b4, fogNear: 12, fogFar: 120, sunDir: [0.3, 0.6, 0.5], sunCol: 0xfff0d0, sunI: 2.5,
+    hemiSky: 0xd8e4dc, hemiGround: 0x3e4a2c, hemiI: 1.25, grass: [0x4a5f2c, 0x6d8040], dirt: 0x6e5a3c, rock: 0x6e6a5c, leaf: [0x30502a, 0x4e7036], bark: 0x4a3a2a, mtn: 0x8a9a92,
+    veg: { broad: 70, palm: 160, fern: 700, grass: 1200, rock: 120, dead: 70 }, motes: 0xfffbd0,
+  },
+  { // Red Canyon: dry badlands between tall red cliffs
+    seed: 63, len: 430, curve: [[11, 50, 0.8], [4, 19, 2.2]], hills: [[2.0, 42, 0.3], [0.9, 15, 1]], canyon: true,
+    skyTop: 0x4d86c9, skyHor: 0xf2dcc0, fog: 0xe6c9a6, fogNear: 30, fogFar: 230, sunDir: [0.35, 0.85, -0.2], sunCol: 0xfff0d8, sunI: 3.2,
+    hemiSky: 0xf4e2c8, hemiGround: 0x7a4a2a, hemiI: 1.1, grass: [0x8a7a42, 0xb09a58], dirt: 0xb0744a, rock: 0xa4583a, leaf: [0x5a6a30, 0x7a8a40], bark: 0x5a4632, mtn: 0xb98a6a,
+    veg: { broad: 0, palm: 25, fern: 0, grass: 420, rock: 340, dead: 70 }, motes: 0xffe2b0,
+  },
+  { // Sunset Plains: open golden grassland, giant herds, low sun
+    seed: 77, len: 440, curve: [[9, 70, 0.1], [4, 27, 1.7]], hills: [[2.6, 60, 0.9], [1.0, 22, 0.2]], plains: true,
+    skyTop: 0x5a6fa8, skyHor: 0xf6c27a, fog: 0xe8c08c, fogNear: 30, fogFar: 240, sunDir: [-0.5, 0.25, -0.8], sunCol: 0xffc480, sunI: 2.8,
+    hemiSky: 0xffd6a8, hemiGround: 0x5a5030, hemiI: 1.25, grass: [0x8a8a3a, 0xb8a850], dirt: 0x8e6a42, rock: 0x857a68, leaf: [0x4a6028, 0x6a8034], bark: 0x5a4330, mtn: 0x9a8090,
+    veg: { broad: 55, palm: 35, fern: 120, grass: 1900, rock: 70, dead: 10 }, motes: 0xffe8b0,
+  },
 ];
 
 const tmpV = new THREE.Vector3();
+
+// weather presets: rain amount, fog distance factor, darkening, thunderstorm
+export const WEATHER = {
+  clear: { rain: 0, fogK: 1, dark: 0, storm: 0 },
+  rain: { rain: 0.75, fogK: 0.62, dark: 0.32, storm: 0 },
+  fog: { rain: 0, fogK: 0.3, dark: 0.12, storm: 0 },
+  storm: { rain: 1, fogK: 0.5, dark: 0.58, storm: 1 },
+};
 
 export class World {
   constructor(renderer) {
@@ -42,7 +68,15 @@ export class World {
     this.sun.shadow.bias = -0.0006; this.sun.shadow.normalBias = 0.04;
     this.scene.add(this.sun); this.scene.add(this.sun.target);
     this.pmrem = new THREE.PMREMGenerator(renderer);
+    this.wx = Object.assign({}, WEATHER.clear); this.wxT = Object.assign({}, WEATHER.clear); this.lightning = 0; this.boltT = 6; this.onLightning = null;
+    // rain streaks around the camera (one draw call)
+    const N = 1400, rp = new Float32Array(N * 6);
+    for (let i = 0; i < N; i++) { const x = (Math.random() - 0.5) * 44, y = Math.random() * 24, z = (Math.random() - 0.5) * 44; rp.set([x, y, z, x + 0.05, y + 0.6, z], i * 6); }
+    const rg = new THREE.BufferGeometry(); rg.setAttribute('position', new THREE.BufferAttribute(rp, 3));
+    this.rain = new THREE.LineSegments(rg, new THREE.LineBasicMaterial({ color: 0xc8d4dc, transparent: true, opacity: 0, depthWrite: false }));
+    this.rain.frustumCulled = false; this.rain.visible = false; this.scene.add(this.rain);
   }
+  setWeather(kind, instant) { this.wxT = Object.assign({}, WEATHER[kind] || WEATHER.clear); this.wxKind = kind; if (instant) Object.assign(this.wx, this.wxT); }
   setShadowSize(n) { this.sun.shadow.mapSize.set(n, n); if (this.sun.shadow.map) { this.sun.shadow.map.dispose(); this.sun.shadow.map = null; } }
 
   /* ---------- track: centre line x(s), height y(s); s = metres travelled, world z = -s ---------- */
@@ -63,6 +97,9 @@ export class World {
       else h += smooth(13, 26, dx) * (12 + n * 14);
     }
     if (E.volcano) h += smooth(20, 60, ad) * n * 6;
+    if (E.swamp) { const isl = fbm(x * 0.05 + 3, z * 0.05, 3); h = lerp(h, E.waterY - 1.6 + Math.max(0, isl - 0.55) * 9, smooth(4.5, 9, ad)); }
+    if (E.canyon) { const wall = smooth(20, 34, ad); h += wall * (22 + n * 18) + smooth(34, 60, ad) * 10; h = wall > 0.3 ? Math.round(h / 3.2) * 3.2 * 0.35 + h * 0.65 : h; }
+    if (E.plains) h = base + far * ((n - 0.45) * 7 + ad * 0.02) + fbm(x * 0.16, z * 0.16, 2) * 0.3 * far;
     return h;
   }
   roadDx(x, z) { return x - this.xr(-z); }
@@ -76,8 +113,9 @@ export class World {
     this.hemi.color.set(E.hemiSky); this.hemi.groundColor.set(E.hemiGround); this.hemi.intensity = E.hemiI * 0.6;
     this.sun.color.set(E.sunCol); this.sun.intensity = E.sunI * 0.75;
     this.sunDir = new THREE.Vector3(...E.sunDir).normalize();
+    this.base = { sunI: this.sun.intensity, hemiI: this.hemi.intensity, fog: new THREE.Color(E.fog), top: new THREE.Color(E.skyTop), hor: new THREE.Color(E.skyHor) };
     this.buildSky(); this.buildTerrain(); this.buildVeg();
-    if (E.river) this.buildWater();
+    if (E.river || E.swamp) this.buildWater();
     if (E.volcano) this.buildVolcano();
     this.buildMotes();
     // image-based lighting from the sky so PBR materials pick up the mood
@@ -139,7 +177,8 @@ export class World {
       c.lerp(dirt, smooth(5.2, 3.0, ad) * 0.95);
       if (ad < 3.4) { const r1 = Math.abs(ad - 0.95); if (r1 < 0.32) c.multiplyScalar(0.8); if (ad < 0.35) c.lerp(gA, 0.35); }
       c.lerp(rock, smooth(0.55, 1.1, slope));
-      if (E.river && h < E.waterY + 0.9) c.lerp(mud, smooth(E.waterY + 0.9, E.waterY + 0.1, h));
+      if ((E.river || E.swamp) && h < E.waterY + 0.9) c.lerp(mud, smooth(E.waterY + 0.9, E.waterY + 0.1, h));
+      if (E.canyon) { const band = 0.5 + 0.5 * Math.sin(h * 1.7 + fbm(x * 0.03, z * 0.03, 2) * 3); c.lerp(new THREE.Color(band > 0.5 ? 0xb8643e : 0xd89a6a), smooth(4, 10, h - this.yr(-z)) * 0.85); }
       if (E.volcano) c.lerp(new THREE.Color(0x3a3430), smooth(0.55, 0.85, fbm(x * 0.02 + 9, z * 0.02, 3)) * 0.6);
       col[k * 3] = c.r; col[k * 3 + 1] = c.g; col[k * 3 + 2] = c.b;
     }
@@ -167,8 +206,9 @@ export class World {
     }, { repeat: true, linear: true });
     nt.repeat.set(30, 60);
     this.waterMat = new THREE.MeshStandardMaterial({ color: 0x2e6f78, roughness: 0.12, metalness: 0.05, normalMap: nt, normalScale: new THREE.Vector2(0.35, 0.35), transparent: true, opacity: 0.88, envMapIntensity: 1.4 });
-    const g = new THREE.PlaneGeometry(400, E.len + 400); g.rotateX(-Math.PI / 2);
-    this.water = new THREE.Mesh(g, this.waterMat); this.water.position.set(-60, E.waterY, -E.len / 2); this.water.receiveShadow = true;
+    const g = new THREE.PlaneGeometry(E.swamp ? 700 : 400, E.len + 400); g.rotateX(-Math.PI / 2);
+    this.water = new THREE.Mesh(g, this.waterMat); this.water.position.set(E.swamp ? 0 : -60, E.waterY, -E.len / 2);
+    if (E.swamp) this.waterMat.color.set(0x3c5a3e); this.water.receiveShadow = true;
     this.root.add(this.water);
   }
 
@@ -268,7 +308,7 @@ export class World {
       while (out.length < n && tries++ < n * 8) {
         const s = -40 + r() * (E.len + 200), side = r() < 0.5 ? -1 : 1, d = minD + Math.pow(r(), opts.pow || 1.4) * (maxD - minD);
         const z = -s, x = this.xr(s) + side * d, h = this.height(x, z);
-        if (E.river && h < E.waterY + 0.25 && !opts.water) continue;
+        if ((E.river || E.swamp) && h < E.waterY + 0.25 && !opts.water) continue;
         if (opts.side && side !== opts.side) continue;
         out.push([x, h, z]); }
       return out; };
@@ -296,6 +336,29 @@ export class World {
     if (v.dead) inst([{ geo: V.dead, mat: deadM, cast: true }], place(v.dead, 6, 80), [0.8, 1.4]);
   }
 
+  updWeather(dt, cam) {
+    const w = this.wx, t = this.wxT, k = Math.min(1, dt * 0.35), B = this.base, E = this.env; if (!B) return;
+    for (const key in t) w[key] += (t[key] - w[key]) * k;
+    const gray = new THREE.Color(0x7d8790), dark = w.dark;
+    this.scene.fog.far = Math.max(45, E.fogFar * w.fogK); this.scene.fog.near = Math.min(E.fogNear, this.scene.fog.far * 0.12 + 4);
+    this.scene.fog.color.copy(B.fog).lerp(gray, dark * 0.75); this.scene.background.copy(this.scene.fog.color);
+    const u = this.sky.material.uniforms; u.top.value.copy(B.top).lerp(gray, dark * 0.85); u.hor.value.copy(B.hor).lerp(gray, dark * 0.8); u.fogc.value.copy(this.scene.fog.color);
+    u.sunCol.value.set(E.sunCol).multiplyScalar(1 - dark * 0.95);
+    this.mtn.material.color.setScalar(1 - dark * 0.45);
+    // lightning in storms
+    if (w.storm > 0.6 && (this.boltT -= dt) <= 0) { this.boltT = 5 + Math.random() * 7; this.lightning = 1; if (this.onLightning) this.onLightning(); }
+    this.lightning = Math.max(0, this.lightning - dt * 3.5);
+    const fl = this.lightning > 0.6 || (this.lightning > 0.2 && this.lightning < 0.35) ? this.lightning : 0;
+    this.sun.intensity = B.sunI * (1 - dark * 0.85); this.hemi.intensity = B.hemiI * (1 - dark * 0.35) + fl * 4;
+    if (this.terrain) this.terrain.material.roughness = 0.96 - w.rain * 0.4;
+    // rain streaks
+    this.rain.visible = w.rain > 0.02; this.rain.material.opacity = w.rain * 0.5;
+    if (this.rain.visible) { this.rain.position.set(cam.position.x, cam.position.y - 6, cam.position.z);
+      const p = this.rain.geometry.attributes.position, a = p.array, fall = 20 * dt;
+      for (let i = 0; i < a.length; i += 6) { let y = a[i + 1] - fall; if (y < 0) y += 24; a[i + 1] = y; a[i + 4] = y + 0.6; }
+      p.needsUpdate = true; }
+  }
+
   /* ---------- per-frame ---------- */
   update(dt, cam) {
     this.time += dt; this.windU.value = this.time;
@@ -305,7 +368,8 @@ export class World {
     const f = tmpV.set(0, 0, -1).applyQuaternion(cam.quaternion); f.y = 0; f.normalize();
     const tgt = new THREE.Vector3().copy(cam.position).addScaledVector(f, 16);
     this.sun.target.position.copy(tgt); this.sun.position.copy(tgt).addScaledVector(this.sunDir, 80);
-    if (this.vegMeshes) { const far = this.env.fogFar + 25; for (const m of this.vegMeshes) { const bs = m.boundingSphere; m.visible = bs.center.distanceTo(cam.position) - bs.radius < far; } }
+    this.updWeather(dt, cam);
+    if (this.vegMeshes) { const far = this.scene.fog.far + 25; for (const m of this.vegMeshes) { const bs = m.boundingSphere; m.visible = bs.center.distanceTo(cam.position) - bs.radius < far; } }
     if (this.water) { this.waterMat.normalMap.offset.y -= dt * 0.03; this.waterMat.normalMap.offset.x += dt * 0.004; }
     if (this.volcano) { this.volcano.position.x = cam.position.x - 170; this.volcano.position.z = cam.position.z - 620;
       for (const s of this.smoke) { const u = (s.userData.u + this.time * 0.02) % 1; s.position.set(u * 120 + Math.sin(u * 9) * 8, 175 + u * 260, 0); const k = 40 + u * 160; s.scale.set(k, k, 1); s.material.opacity = 0.75 * (1 - u); } }

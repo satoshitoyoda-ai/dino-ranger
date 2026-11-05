@@ -27,6 +27,9 @@ export const SPECIES = {
     pal: [{ dark: '#3e463e', base: '#7c8679', belly: '#b9bca8', stripe: '#323a32' }] },
 };
 SPECIES.bigTrike = Object.assign({}, SPECIES.trike, { base: 'trike', hp: 10, cry: 'bellowBig' });
+SPECIES.bigStego = Object.assign({}, SPECIES.stego, { base: 'stego', hp: 10, cry: 'bellowBig' });
+SPECIES.alphaRaptor = Object.assign({}, SPECIES.raptor, { base: 'raptor', hp: 10, cry: 'screech' });
+SPECIES.kingRex = Object.assign({}, SPECIES.rex, { base: 'rex', hp: 16, cry: 'roar' });
 
 /* ---------------- skin textures ---------------- */
 const texCache = {};

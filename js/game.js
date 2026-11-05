@@ -2,17 +2,17 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { clamp, lerp, rnd, pick, weighted, ease } from './util.js';
-import { World } from './world.js';
+import { World, WEATHER } from './world.js';
 import { Dino, SPECIES, loadPack, PACK } from './dinos.js';
 import { Cockpit, makeDart } from './rifle.js';
 import { FX } from './fx.js';
-import { audioBind, audioInit, sfx, cry, say, musicStart, musicStop, audioTick, ambOff, AC } from './audio.js';
+import { audioBind, audioInit, sfx, cry, say, musicStart, musicStop, audioTick, ambOff, AC, setRain } from './audio.js';
 
-export const VERSION = '3.2.0';
+export const VERSION = '3.4.0';
 
 /* ================= settings (this device only) ================= */
 const SKEY = 'dinoRanger.v1';
-const DEF = { sound: true, music: true, voice: true, diff: 'easy', intensity: 'action', blood: true, energy: true, ridesPerDay: 2, name: '', today: '', rides: 0, seen: {}, totalStars: 0 };
+const DEF = { sound: true, music: true, voice: true, diff: 'easy', intensity: 'action', blood: true, energy: true, weather: 'random', ridesPerDay: 2, name: '', today: '', rides: 0, seen: {}, totalStars: 0 };
 const S = load();
 function load() { try { return Object.assign({}, DEF, JSON.parse(localStorage.getItem(SKEY) || '{}')); } catch (e) { return Object.assign({}, DEF); } }
 function save() { try { localStorage.setItem(SKEY, JSON.stringify(S)); } catch (e) {} }
@@ -35,7 +35,14 @@ const LEVELS = [
     boss: 'spino', bossSize: 1, bossHp: [10, 14], bossRoll: 0, bossSay: 'A huge Spinosaurus by the river! Fire, fire, fire!', kinds: { raptor: 2, ptera: 2, stego: 1.2 }, root: 43 },
   { name: 'Volcano Ridge', emoji: '🌋', say: 'Volcano Ridge. Last mission, ranger! Stay sharp!',
     boss: 'rex', bossSize: 1, bossHp: [12, 16], bossRoll: 1.8, bossSay: "It's the T. rex! Fire the darts!", kinds: { raptor: 3, ptera: 1, stego: 1, trike: 1 }, root: 40 },
+  { name: 'Misty Marsh', emoji: '🐸', say: 'Misty Marsh, ranger. Stay on the causeway, and watch the water!',
+    boss: 'bigStego', bossSize: 1.7, bossHp: [10, 14], bossRoll: 0, bossSay: 'A giant Stegosaurus! Look at those spikes! Fire!', kinds: { raptor: 2, stego: 1.5, ptera: 1.5 }, root: 42 },
+  { name: 'Red Canyon', emoji: '🏜️', say: 'Red Canyon. Raptors love the rocks here. Eyes open!',
+    boss: 'alphaRaptor', bossSize: 2.6, bossHp: [10, 14], bossRoll: 0, bossSay: "That's the Alpha Raptor! It's fast. Keep firing!", kinds: { raptor: 4, trike: 1, ptera: 0.7 }, root: 44 },
+  { name: 'Sunset Plains', emoji: '🌅', say: 'Sunset Plains. Giant herds all around. Final mission, ranger!',
+    boss: 'kingRex', bossSize: 1.3, bossHp: [14, 18], bossRoll: 1.8, bossSay: "It's the King Rex! The biggest one of all!", kinds: { raptor: 2, trike: 1.5, stego: 1, ptera: 1 }, root: 41, herd: true },
 ];
+const SET = 3;   // a ride = 3 missions; rides alternate between missions 1-3 and 4-6
 const GUIDE = ['raptor', 'trike', 'stego', 'ptera', 'spino', 'rex'];
 const RIDE = 6.5;
 audioBind(S, ACT, () => (LEVELS[G ? G.level : 0] || LEVELS[0]).root);
@@ -94,12 +101,13 @@ function spawnDino() {
   const lv = L(), kind = weighted(lv.kinds), sp = SPECIES[kind];
   const pairs = kind === 'raptor' && Math.random() < 0.4 ? 2 : 1;
   let side = Math.random() < 0.5 ? -1 : 1; if (world.env.river && sp.type !== 'flyer') side = 1;
-  const roleR = Math.random(), role = sp.type === 'flyer' ? 'swoop' : (kind === 'stego' ? (roleR < 0.25 ? 'charge' : 'cross') : kind === 'raptor' ? (roleR < 0.6 ? 'charge' : 'cross') : (roleR < 0.5 ? 'charge' : 'cross'));
+  const swamp = world.env.swamp && sp.type !== 'flyer';
+  const roleR = Math.random(), role = swamp ? 'charge' : sp.type === 'flyer' ? 'swoop' : (kind === 'stego' ? (roleR < 0.25 ? 'charge' : 'cross') : kind === 'raptor' ? (roleR < 0.6 ? 'charge' : 'cross') : (roleR < 0.5 ? 'charge' : 'cross'));
   const ahead = rnd(36, 52);
   for (let i = 0; i < pairs; i++) {
     const d = mkDino(kind, kind === 'raptor' ? rnd(1.3, 1.6) : rnd(0.9, 1.15), Math.random() < 0.5 ? 0 : 1);
     const s = G.s + ahead + i * 3, base = world.posAt(s), F = world.dirAt(s), R = tmp.crossVectors(F, UP).normalize();
-    const lat = side * (sp.type === 'flyer' ? rnd(-10, 10) : rnd(9, 24)) + i * side * 2;
+    const lat = swamp ? rnd(-2, 2) + i * 2.5 : side * (sp.type === 'flyer' ? rnd(-10, 10) : rnd(9, 24)) + i * side * 2;
     d.pos.copy(base).addScaledVector(R, lat); d.pos.y = groundAt(d.pos);
     // every individual moves at its own pace: sprinters and plodders
     d.vmax = rnd(sp.speed[0], sp.speed[1]) * D().speedMul; d.gait = d.vmax > (sp.type === 'thero' ? 3.4 : 3.0) ? 'run' : 'walk';
@@ -114,7 +122,8 @@ function spawnDino() {
 function spawnHerd() { // gentle background giants (not targets)
   for (const d of G.bg) removeDino(d); G.bg = [];
   if (!L().herd) return;
-  for (const [s, lat, k] of [[70, -55, 1], [80, -68, 0.85], [150, 60, 1.05], [230, -62, 0.95], [238, -75, 0.8]]) {
+  const herd = [[70, -55, 1], [80, -68, 0.85], [150, 60, 1.05], [230, -62, 0.95], [238, -75, 0.8]].concat(world.env.plains ? [[110, 48, 1.1], [300, 58, 1], [310, 72, 0.9], [360, -52, 1.05], [400, 66, 0.95]] : []);
+  for (const [s, lat, k] of herd) {
     const d = mkDino('apato', k); const b = world.posAt(s), R = world.dirAt(s).cross(UP).normalize(); d.pos.copy(b).addScaledVector(R, lat); d.pos.y = groundAt(d.pos);
     d.heading = Math.atan2(-R.x * Math.sign(lat), -R.z * Math.sign(lat)) + rnd(-0.6, 0.6) + Math.PI / 2; d.vmax = rnd(0.6, 1.2); d.setAnim('walk'); d.speed = d.vmax;
     d.hitMeshes.forEach(m => { m.userData.dino = null; }); G.bg.push(d);
@@ -133,17 +142,34 @@ function pickHit(x, y) {
   return null;
 }
 function missPoint(x, y) { ndc.set(x / W * 2 - 1, -(y / H) * 2 + 1); ray.setFromCamera(ndc, camera); const o = ray.ray.origin, d = ray.ray.direction; for (let t = 2; t < 140; t += 1.2) { tmp.copy(o).addScaledVector(d, t); if (tmp.y < world.height(tmp.x, tmp.z)) return { p: tmp.clone(), ground: true }; } return { p: o.clone().addScaledVector(d, 140), ground: false }; }
+// weapons: dart rifle, rapid darts, spread (double barrel), sleepy cannon (explodes, hits everything nearby)
+const WEAPONS = {
+  rifle:  { icon: '🎯', name: 'Dart rifle', cd: 0.3, dmg: 1, pellets: 1, spread: 0, sfx: 'dart' },
+  rapid:  { icon: '⚡', name: 'Rapid darts', cd: 0.11, dmg: 0.4, pellets: 1, spread: 7, sfx: 'rapid', small: true },
+  spread: { icon: '✴️', name: 'Spread gun', cd: 0.8, dmg: 0.6, pellets: 6, spread: 34, sfx: 'spread', small: true },
+  cannon: { icon: '💥', name: 'Sleepy cannon', cd: 1.4, dmg: 3, pellets: 1, spread: 0, sfx: 'launch', splash: 5, speed: 55 },
+};
+const curW = () => WEAPONS[G.weapon] || WEAPONS.rifle;
+function setWeapon(k) { G.weapon = k; cockpit.setWeapon(k); G.cool = 0; document.querySelectorAll('#weapons button').forEach(b => b.classList.toggle('sel', b.dataset.w === k)); }
+let shellGeo = null;
+function makeShell() { if (!shellGeo) { shellGeo = [new THREE.CylinderGeometry(0.05, 0.05, 0.22, 12).rotateX(Math.PI / 2), new THREE.ConeGeometry(0.05, 0.1, 12).rotateX(-Math.PI / 2).translate(0, 0, -0.16)]; shellGeo.forEach(g => (g.userData.keep = true)); shellGeo.mats = [new THREE.MeshStandardMaterial({ color: 0x55603a, roughness: 0.5 }), new THREE.MeshStandardMaterial({ color: 0xe8873a, roughness: 0.4 })]; }
+  const g = new THREE.Group(); g.add(new THREE.Mesh(shellGeo[0], shellGeo.mats[0]), new THREE.Mesh(shellGeo[1], shellGeo.mats[1])); return g; }
 function fire(x, y) {
-  if (G.darts.length > 12) return;
-  G.aim.x = x; G.aim.y = y;
-  const h = pickHit(x, y), from = cockpit.muzzleWorld(new THREE.Vector3());
-  const dart = makeDart(); scene.add(dart); dart.position.copy(from);
-  let to, hit = null;
-  if (h) { const d = h.object.userData.dino; hit = { d, obj: h.object, local: h.object.worldToLocal(h.point.clone()), head: d.isHead(h.object, h.point) }; to = h.point.clone(); }
-  else { const m = missPoint(x, y); to = m.p; hit = { miss: true, ground: m.ground }; }
-  const dist = from.distanceTo(to);
-  G.darts.push({ m: dart, from, to, t: 0, dur: clamp(dist / 140, 0.05, 0.22), hit });
-  aimDart(dart, from, to); sfx.dart(); cockpit.fire();
+  if (G.cool > 0 || G.darts.length > 36) return;
+  const w = curW(); G.cool = w.cd; G.aim.x = x; G.aim.y = y;
+  const from = cockpit.muzzleWorld(new THREE.Vector3()), k = H / 820;
+  for (let i = 0; i < w.pellets; i++) {
+    const a = Math.random() * Math.PI * 2, r = i === 0 && w.pellets > 1 ? 0 : Math.sqrt(Math.random()) * w.spread * k, px = x + Math.cos(a) * r, py = y + Math.sin(a) * r;
+    const h = pickHit(px, py);
+    const m = w.splash ? makeShell() : makeDart(); if (w.small) m.scale.setScalar(0.7); scene.add(m); m.position.copy(from);
+    let to, hit;
+    if (h) { const d = h.object.userData.dino; hit = { d, obj: h.object, local: h.object.worldToLocal(h.point.clone()), head: d.isHead(h.object, h.point) }; to = h.point.clone(); }
+    else { const mp = missPoint(px, py); to = mp.p; hit = { miss: true, ground: mp.ground }; }
+    const dist = from.distanceTo(to);
+    G.darts.push({ m, from: from.clone(), to, t: 0, dur: clamp(dist / (w.speed || 140), 0.05, w.splash ? 1.2 : 0.22), hit, w });
+    aimDart(m, from, to);
+  }
+  sfx[w.sfx](); cockpit.fire(); if (w.splash) G.shake = Math.max(G.shake, 0.12);
 }
 const NEGZ = new THREE.Vector3(0, 0, -1);
 function aimDart(m, a, b) { m.quaternion.setFromUnitVectors(NEGZ, tmp2.copy(b).sub(a).normalize()); }
@@ -158,20 +184,37 @@ function stickDart(d, obj, local, dir) {
 }
 const WOUND_G = new THREE.SphereGeometry(0.075, 10, 8); WOUND_G.userData.keep = true; const WOUND_M = new THREE.MeshStandardMaterial({ color: 0x5a0606, roughness: 0.25, metalness: 0.1 });
 function dartArrive(dt) {
-  const { hit } = dt;
+  const { hit } = dt, w = dt.w || WEAPONS.rifle;
+  if (w.splash) return explode(dt, hit);
   if (hit.miss) { sfx.miss(); if (hit.ground) fx.dust(dt.to, 4, 0.25, [0.55, 0.48, 0.36]); return; }
   const d = hit.d; if (!d || d.mode === 'dead' || !d.root.parent) { sfx.miss(); return; }
   const wp = hit.obj.localToWorld(hit.local.clone()), dir = tmp2.copy(dt.to).sub(dt.from).normalize();
   stickDart(d, hit.obj, hit.local, dir);
-  const dmg = hit.head ? 2 : 1;
-  sfx.thunk(hit.head);
-  if (BLOOD()) fx.blood(wp, dir, (d.boss ? 1.6 : 1) * (hit.head ? 1.3 : 1) * Math.max(0.8, d.size), hit.head ? 30 : 20);
+  damage(d, w.dmg * (hit.head ? 2 : 1), wp, dir, hit.head, w.small ? 0.6 : 1);
+}
+function damage(d, dmg, wp, dir, head, fxK = 1) {
+  sfx.thunk(head);
+  if (BLOOD()) fx.blood(wp, dir, (d.boss ? 1.6 : 1) * (head ? 1.3 : 1) * Math.max(0.8, d.size) * fxK, Math.round((head ? 30 : 20) * fxK));
   else fx.puff(wp, 0.3);
   d.hitT = 0.35; d.stun = 0.7; d.flinchDir = Math.random() < 0.5 ? -1 : 1;
-  if (hit.head) pop(wp, '★★');
-  if (d.boss) { d.fed += dmg; star(wp, hit.head ? 2 : 1); if (d.fed >= d.hp) bossDone(); else cry(d.sp.cry, 0.4); return; }
+  if (head) pop(wp, '★★');
+  if (d.boss) { const before = Math.floor(d.fed); d.fed += dmg; const n = Math.floor(d.fed) - before; if (n > 0) star(wp, Math.min(n, 4)); if (d.fed >= d.hp) bossDone(); else cry(d.sp.cry, 0.4); return; }
   d.hp -= dmg;
-  if (d.hp <= 0) killDino(d, wp, hit.head); else cry(d.sp.cry, 0.6);
+  if (d.hp <= 0) killDino(d, wp, head); else cry(d.sp.cry, 0.6);
+}
+function explode(dt, hit) {
+  const at = hit.miss ? dt.to.clone() : hit.obj.localToWorld(hit.local.clone()), w = dt.w;
+  sfx.boom(); G.shake = Math.max(G.shake, clamp(9 / at.distanceTo(camera.position), 0.2, 0.7)); G.flash = Math.max(G.flash, 0.25);
+  fx.boom(at, 1.4);
+  const dir = tmp2.copy(dt.to).sub(dt.from).normalize().clone();
+  const all = G.dinos.filter(d => d.mode !== 'dead' && d.sp.type !== undefined).concat(G.boss && G.boss.mode !== 'dead' ? [G.boss] : []);
+  for (const d of all) {
+    const c = d.bodyWorld(new THREE.Vector3()), dist = c.distanceTo(at) - d.dims.len * d.size * 0.3;
+    const direct = hit.d === d;
+    if (!direct && dist > w.splash) continue;
+    const dmg = direct ? w.dmg * (hit.head ? 1.5 : 1) : Math.max(1, w.dmg * (1 - Math.max(0, dist) / w.splash));
+    damage(d, dmg, direct ? at : c, dir, direct && hit.head, 1.3);
+  }
 }
 function killDino(d, wp, head) {
   d.mode = 'dead'; d.setAnim('dead'); d.deadT = 0; d.speed = 0; cry(d.sp.cry, 0.9);
@@ -297,29 +340,30 @@ function star(wp, n) { const s = toScreen(wp); for (let i = 0; i < n; i++) G.sta
 function pop(wp, text) { const s = toScreen(wp); G.pops.push({ x: s.x, y: s.y - 30, t: 0, text }); }
 
 /* ================= flow ================= */
-function show(id) { document.querySelectorAll('.screen').forEach(s => s.classList.toggle('on', s.id === id)); $('bPause').classList.toggle('on', id === null && G.state === 'play'); }
-function dots(el, cur) { el.innerHTML = ''; for (let i = 0; i < LEVELS.length; i++) { const d = document.createElement('i'); if (i < cur) d.className = 'done'; else if (i === cur) d.className = 'now'; el.appendChild(d); } }
+function show(id) { document.querySelectorAll('.screen').forEach(s => s.classList.toggle('on', s.id === id)); $('bPause').classList.toggle('on', id === null && G.state === 'play'); $('weapons').classList.toggle('on', id === null && G.state === 'play'); }
+function dots(el, cur, lvl) { el.innerHTML = ''; const a = Math.floor(lvl / SET) * SET; cur -= a; for (let i = 0; i < SET; i++) { const d = document.createElement('i'); if (i < cur) d.className = 'done'; else if (i === cur) d.className = 'now'; el.appendChild(d); } }
 function clearLevel() {
   for (const d of G.dinos) removeDino(d); G.dinos = []; if (G.boss) { removeDino(G.boss); G.boss = null; }
   for (const dt of G.darts) scene.remove(dt.m); G.darts = []; fx.clear(); G.stars = []; G.pops = [];
 }
 function buildLevel(i) { G.level = i; clearLevel(); world.build(i); spawnHerd(); G.s = 0; G.v = 0; G.vT = 0; placeJeep(0); }
 function toTitle() {
-  G.state = 'title'; musicStop(); buildLevel(0); G.s = 4; G.vT = 0.8; G.aim = { x: W / 2, y: H * 0.45 };
+  G.state = 'title'; musicStop(); buildLevel(0); world.setWeather('clear', true); G.wx = ['clear']; G.s = 4; G.vT = 0.8; G.aim = { x: W / 2, y: H * 0.45 };
   for (const [k, sOff, lat] of [['raptor', 13, -4.5], ['trike', 19, 6], ['raptor', 15, -6.5], ['stego', 30, -9]]) { const d = mkDino(k); const b = world.posAt(G.s + sOff), R = world.dirAt(G.s + sOff).cross(UP).normalize(); d.pos.copy(b).addScaledVector(R, lat); d.pos.y = groundAt(d.pos); d.heading = Math.atan2(-R.x * Math.sign(lat), -R.z * Math.sign(lat)) + 0.6; d.mode = 'idle'; d.setAnim('idle'); G.dinos.push(d); }
   show('title');
 }
+function setStart() { return (S.set || 0) * SET; }
 function startRide() {
   const lim = +S.ridesPerDay;
   if (lim > 0 && ridesToday() >= lim) { G.state = 'rest'; show('rest'); say("The dinosaurs are sleeping. Let's go on a new mission tomorrow" + nameBit() + '!'); return; }
-  ridesToday(); S.rides++; save(); G.score = 0; startLevel(0);
+  ridesToday(); S.rides++; save(); G.score = 0; startLevel(setStart());
 }
 function startLevel(i) {
   const lv = LEVELS[i];
-  $('iEmoji').textContent = lv.emoji; $('iName').textContent = lv.name; dots($('iDots'), i);
+  $('iEmoji').textContent = lv.emoji; $('iName').textContent = lv.name; dots($('iDots'), i, i);
   G.state = 'intro'; show('intro'); say(lv.say);
   setTimeout(() => { // build after the card is painted
-    buildLevel(i); G.pointers.clear(); G.phase = 'ride'; G.spawnT = 2.5; G.levelScore = 0; G.energy = 100; G.aim = { x: W / 2, y: H * 0.45 }; G.introT = 2.4;
+    buildLevel(i); G.pointers.clear(); G.phase = 'ride'; G.spawnT = 2.5; G.levelScore = 0; G.energy = 100; planWeather(); G.aim = { x: W / 2, y: H * 0.45 }; G.introT = 2.4;
   }, 60);
 }
 // jeep energy: bites drain it; at zero the mission is over (grown-ups can switch this off)
@@ -332,11 +376,21 @@ function gameOver() {
   G.state = 'over'; G.vT = 0; G.pointers.clear(); musicStop(); show('over');
   say('Oh no! The jeep is out of energy. Tap play to try again, ranger' + nameBit() + '!');
 }
+// weather: each mission starts with one kind and may change once on the way
+const WX_SAY = { rain: "It's starting to rain, ranger!", fog: 'Fog is rolling in. Watch closely!', storm: 'A thunderstorm! Hold on tight!', clear: 'The sky is clearing up!' };
+const WX_ICON = { clear: '☀️', rain: '🌧️', fog: '🌫️', storm: '⛈️' };
+function planWeather() {
+  const pref = S.weather || 'random';
+  if (pref !== 'random') { G.wx = [pref]; G.wxAt = 1e9; world.setWeather(pref, true); return; }
+  const start = pick(['clear', 'clear', 'rain', 'fog', 'storm']); let next = pick(['clear', 'rain', 'fog', 'storm'].filter(k => k !== start));
+  G.wx = [start, next]; G.wxAt = world.env.len * rnd(0.35, 0.6); world.setWeather(start, true);
+}
+world.onLightning = () => { G.flash = Math.max(G.flash, 0.6); setTimeout(() => sfx.thunder(), 150); };
 function beginPlay() { G.state = 'play'; G.vT = RIDE; show(null); musicStart(); }
 function levelClear() {
   S.totalStars += G.levelScore; save(); musicStop();
-  if (G.level >= LEVELS.length - 1) { G.state = 'end'; $('eStars').textContent = G.score; show('end'); setTimeout(() => say((BLOOD() ? 'Mission complete! You stopped every dinosaur. Great job, ranger' : 'Mission complete! All the dinosaurs are safe and sleeping. Great job, ranger') + nameBit() + '!'), 400); return; }
-  G.state = 'clear'; $('cStars').textContent = G.levelScore; dots($('cDots'), G.level + 1); show('clear');
+  if (G.level >= Math.min(LEVELS.length, setStart() + SET) - 1) { S.set = ((S.set || 0) + 1) % Math.ceil(LEVELS.length / SET); save(); G.state = 'end'; $('eStars').textContent = G.score; show('end'); setTimeout(() => say((BLOOD() ? 'Mission complete! You stopped every dinosaur. Great job, ranger' : 'Mission complete! All the dinosaurs are safe and sleeping. Great job, ranger') + nameBit() + '!'), 400); return; }
+  G.state = 'clear'; $('cStars').textContent = G.levelScore; dots($('cDots'), G.level + 1, G.level); show('clear');
 }
 function pauseGame() { if (G.state !== 'play') return; G.state = 'paused'; G.pointers.clear(); musicStop(); show('pause'); }
 function resumeGame() { G.state = 'play'; show(null); musicStart(); }
@@ -375,8 +429,10 @@ function update(dt) {
       const active = G.dinos.filter(d => d.mode !== 'dead' && d.mode !== 'leave').length;
       if (G.spawnT <= 0 && G.s < env.len - 30) { if (active < D().max) spawnDino(); G.spawnT = D().interval * rnd(0.7, 1.3); }
       if (G.s >= env.len) spawnBoss();
+      if (G.s >= G.wxAt && G.wx[1]) { world.setWeather(G.wx[1]); G.wxAt = 1e9; say(WX_SAY[G.wx[1]], false); }
     }
-    for (const p of G.pointers.values()) { p.hold += dt; if (p.hold >= 0.3) { p.hold = 0; fire(p.x, p.y); } }
+    G.cool = Math.max(0, (G.cool || 0) - dt);
+    for (const p of G.pointers.values()) { p.hold += dt; if (p.hold >= 0.12 && G.cool <= 0) fire(p.x, p.y); }
     if (G.phase === 'done') { G.doneT += dt; if (G.doneT > 4.5) levelClear(); }
   }
   for (const d of G.dinos) { if (d.mode !== 'idle') updDino(d, dt); else d.pos.y = groundAt(d.pos); d.update(dt); }
@@ -390,7 +446,7 @@ function update(dt) {
   ndc.set(G.aim.x / W * 2 - 1, -(G.aim.y / H) * 2 + 1); ray.setFromCamera(ndc, camera);
   const dc = ray.ray.direction.clone().applyQuaternion(camera.quaternion.clone().invert());
   cockpit.aimAt(dc, dt); cockpit.update(dt);
-  fx.update(dt); world.update(dt, camera);
+  fx.update(dt); world.update(dt, camera); if (AC) setRain(live && G.state !== 'title' ? world.wx.rain : 0);
   for (const s of G.stars) { s.t += dt; if (s.t >= s.dur && !s.done) { s.done = true; G.score++; G.levelScore++; G.hudBump = 1; sfx.ding(); } }
   G.stars = G.stars.filter(s => !s.done); for (const p of G.pops) p.t += dt; G.pops = G.pops.filter(p => p.t < 0.9);
   G.shake = Math.max(0, G.shake - dt); G.flash = Math.max(0, G.flash - dt * 2); G.red = Math.max(0, G.red - dt * 1.5); G.hudBump = Math.max(0, G.hudBump - dt * 3); G.hurtT = Math.max(0, (G.hurtT || 0) - dt * 2);
@@ -427,8 +483,9 @@ function drawHUD() {
     hx.fillStyle = 'rgba(243,235,211,0.85)'; rr(cx - w / 2 - 12, y - 17, w + 24, 34, 10); hx.fill(); hx.lineWidth = 3; hx.strokeStyle = '#2E2A1E'; hx.stroke();
     hx.fillStyle = '#E8873A'; rr(cx - w / 2 - 5, y - 10, (w + 10) * u + 4, 20, 6); hx.fill();
     hx.fillStyle = '#F3EBD3'; hx.beginPath(); hx.arc(cx + w / 2 + 18, y, 28, 0, 7); hx.fill(); hx.stroke();
-    hx.font = '32px system-ui, sans-serif'; hx.textAlign = 'center'; hx.fillText(L().boss === 'rex' || L().boss === 'spino' ? '🦖' : '🦕', cx + w / 2 + 18, y + 2); hx.textAlign = 'start';
+    hx.font = '32px system-ui, sans-serif'; hx.textAlign = 'center'; hx.fillText(['rex', 'spino', 'kingRex', 'alphaRaptor'].includes(L().boss) ? '🦖' : '🦕', cx + w / 2 + 18, y + 2); hx.textAlign = 'start';
     hx.fillStyle = '#4E5B30'; hx.strokeStyle = '#2E2A1E'; hx.lineWidth = 3; rr(cx - w / 2 + w * u - 16, y - 11, 32, 22, 6); hx.fill(); hx.stroke();
+    hx.font = '30px system-ui, sans-serif'; hx.textAlign = 'center'; hx.fillText(WX_ICON[world.wxKind] || '☀️', cx - w / 2 - 38, y + 2); hx.textAlign = 'start';
   } else if (G.boss) {
     const w = Math.min(460, W * 0.4), u = clamp(G.boss.fed / G.boss.hp, 0, 1);
     hx.fillStyle = 'rgba(243,235,211,0.9)'; rr(cx - w / 2 - 12, y - 20, w + 24, 40, 12); hx.fill(); hx.lineWidth = 3; hx.strokeStyle = '#2E2A1E'; hx.stroke();
@@ -474,6 +531,8 @@ tapBtn('bRetry', () => { G.score -= G.levelScore; startLevel(G.level); });
 tapBtn('bHome4', toTitle);
 tapBtn('bHome1', toTitle); tapBtn('bHome2', toTitle); tapBtn('bHome3', toTitle);
 tapBtn('bGuide', openGuide);
+for (const [k, w] of Object.entries(WEAPONS)) { const b = document.createElement('button'); b.dataset.w = k; b.textContent = w.icon; b.setAttribute('aria-label', w.name); b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); audioInit(); sfx.ui(); setWeapon(k); }); $('weapons').appendChild(b); }
+setWeapon('rifle');
 tapBtn('fBack', () => { G.state = 'title'; show('title'); });
 
 /* ================= field guide (3D portraits) ================= */
@@ -519,7 +578,7 @@ $('bGear').addEventListener('pointerdown', e => { e.preventDefault(); gearStart 
 ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => $('bGear').addEventListener(ev, () => { if (gearT) gearCancel(); }));
 function openParent() {
   G.state = 'parent';
-  $('pInt').value = S.intensity; $('pBlood').checked = S.blood !== false; $('pDiff').value = S.diff; $('pSound').checked = S.sound; $('pMusic').checked = S.music; $('pVoice').checked = S.voice; $('pEnergy').checked = S.energy !== false; $('pRides').value = String(S.ridesPerDay); $('pName').value = S.name;
+  $('pInt').value = S.intensity; $('pBlood').checked = S.blood !== false; $('pDiff').value = S.diff; $('pSound').checked = S.sound; $('pMusic').checked = S.music; $('pVoice').checked = S.voice; $('pEnergy').checked = S.energy !== false; $('pWeather').value = S.weather || 'random'; $('pRides').value = String(S.ridesPerDay); $('pName').value = S.name;
   const lim = +S.ridesPerDay;
   $('pStat').textContent = 'Missions today: ' + ridesToday() + (lim ? ' of ' + lim : '') + ' · Stars so far: ' + S.totalStars + ' · Species found: ' + GUIDE.filter(k => S.seen[k]).length + ' of ' + GUIDE.length;
   $('pVer').textContent = 'Dino Ranger: Jungle Run v' + VERSION + ' · 3D' + (Object.keys(PACK).length ? ' · models: ' + Object.keys(PACK).join(', ') : ' · built-in models') + ' · ' + Math.round(G.fps) + ' fps';
@@ -527,7 +586,7 @@ function openParent() {
 }
 $('pReset').addEventListener('click', () => { S.rides = 0; S.today = todayStr(); save(); openParent(); });
 $('pDone').addEventListener('click', () => {
-  S.intensity = $('pInt').value; S.blood = $('pBlood').checked; S.diff = $('pDiff').value; S.sound = $('pSound').checked; S.music = $('pMusic').checked; S.voice = $('pVoice').checked; S.energy = $('pEnergy').checked; S.ridesPerDay = +$('pRides').value; S.name = $('pName').value.trim().slice(0, 20);
+  S.intensity = $('pInt').value; S.blood = $('pBlood').checked; S.diff = $('pDiff').value; S.sound = $('pSound').checked; S.music = $('pMusic').checked; S.voice = $('pVoice').checked; S.energy = $('pEnergy').checked; S.weather = $('pWeather').value; S.ridesPerDay = +$('pRides').value; S.name = $('pName').value.trim().slice(0, 20);
   save(); G.state = 'title'; show('title');
 });
 
@@ -547,4 +606,4 @@ if (navigator.storage && navigator.storage.persist) navigator.storage.persist().
 })();
 
 // test hooks for the grown-up/dev console (no effect on play)
-window.__dino = { step(n, dt = 1 / 60) { for (let i = 0; i < n; i++) update(dt); renderer.render(scene, camera); drawHUD(); }, G, S, world, camera, spawnDino, spawnBoss, fire, toScreen, SPECIES, startLevel, beginPlay, mkDino, LEVELS, renderer };
+window.__dino = { setWeapon, WEAPONS, step(n, dt = 1 / 60) { for (let i = 0; i < n; i++) update(dt); renderer.render(scene, camera); drawHUD(); }, G, S, world, camera, spawnDino, spawnBoss, fire, toScreen, SPECIES, startLevel, beginPlay, mkDino, LEVELS, renderer };
