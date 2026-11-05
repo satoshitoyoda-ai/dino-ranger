@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Dino Ranger">
+<meta name="theme-color" content="#3C4826">
+<script type="importmap">{ "imports": { "three": "./lib/three.module.js", "three/addons/": "./lib/addons/" } }</script>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<title>Dino Ranger: Jungle Run</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #3C4826; touch-action: none;
+    user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; overscroll-behavior: none;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #2E2A1E; }
+  #cv { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  #hud { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; }
+  #loading { position: fixed; inset: 0; z-index: 40; background: #3C4826; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 28px; color: #F2C14E; }
+  #loading.on { display: flex; }
+  #loading .lt { font-size: 64px; font-weight: 900; font-style: italic; letter-spacing: 3px; -webkit-text-stroke: 4px #2E2A1E; paint-order: stroke fill; }
+  #loading .lb { width: 360px; height: 22px; border-radius: 11px; border: 4px solid #2E2A1E; background: #E2D6B4; overflow: hidden; }
+  #loading .lb i { display: block; height: 100%; width: 8%; background: #E8873A; transition: width .2s; }
+  #loading .lw { color: #fff; font-size: 20px; max-width: 70vw; text-align: center; }
+  button { font: inherit; border: none; cursor: pointer; touch-action: manipulation; color: inherit; }
+  .screen { position: fixed; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 26px; z-index: 5;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+  .screen.on { display: flex; }
+  .dim { background: rgba(20, 18, 10, 0.5); }
+  .logo { text-align: center; margin-top: -4vh; filter: drop-shadow(0 8px 10px rgba(0,0,0,.45)); }
+  .logo .t1 { font-size: min(13vh, 104px); font-weight: 900; letter-spacing: 3px; color: #F2C14E; line-height: .9;
+    -webkit-text-stroke: 5px #2E2A1E; paint-order: stroke fill; font-style: italic; }
+  .logo .t2 { display: inline-block; margin-top: 10px; font-size: min(5vh, 36px); font-weight: 900; letter-spacing: 8px; color: #fff; background: #4E5E2E;
+    padding: 6px 22px; border-radius: 8px; border: 3px solid #2E2A1E; }
+  .btn { display: flex; align-items: center; justify-content: center; border-radius: 50%; background: #E8873A;
+    box-shadow: 0 10px 0 #9C5520, 0 16px 26px rgba(0,0,0,.35); transition: transform .08s; border: 4px solid #2E2A1E; }
+  .btn:active { transform: translateY(6px); box-shadow: 0 4px 0 #9C5520, 0 8px 14px rgba(0,0,0,.3); }
+  .btn svg { width: 56%; height: 56%; pointer-events: none; }
+  .btn.khaki { background: #C9B27A; box-shadow: 0 10px 0 #7E6A3C, 0 16px 26px rgba(0,0,0,.35); }
+  .btn.khaki:active { box-shadow: 0 4px 0 #7E6A3C; }
+  .btn.slate { background: #7E97A3; box-shadow: 0 10px 0 #4A5E68, 0 16px 26px rgba(0,0,0,.35); }
+  .btn.slate:active { box-shadow: 0 4px 0 #4A5E68; }
+  .xl { width: 200px; height: 200px; } .lg { width: 150px; height: 150px; } .md { width: 112px; height: 112px; }
+  .pulse { animation: pulse 1.5s ease-in-out infinite; }
+  @keyframes pulse { 50% { transform: scale(1.07); } }
+  .row { display: flex; gap: 40px; align-items: center; justify-content: center; }
+  #bPause { position: fixed; top: calc(14px + env(safe-area-inset-top)); right: calc(14px + env(safe-area-inset-right)); width: 92px; height: 92px; z-index: 4;
+    display: none; align-items: center; justify-content: center; background: rgba(243,235,211,.9); border-radius: 50%; border: 4px solid #2E2A1E; }
+  #bPause.on { display: flex; }
+  #bPause svg { width: 44%; height: 44%; }
+  #bGear { position: fixed; top: calc(14px + env(safe-area-inset-top)); right: calc(14px + env(safe-area-inset-right)); width: 70px; height: 70px; border-radius: 50%;
+    background: conic-gradient(#F2C14E calc(var(--p, 0) * 1%), rgba(255,255,255,.4) 0); display: flex; align-items: center; justify-content: center; }
+  #bGear span { width: 56px; height: 56px; border-radius: 50%; background: rgba(243,235,211,.85); display: flex; align-items: center; justify-content: center; font-size: 30px; }
+  .card { background: #F3EBD3; border-radius: 28px; padding: 26px 44px; border: 5px solid #2E2A1E; box-shadow: 0 12px 0 #8A7A50, 0 20px 40px rgba(0,0,0,.35);
+    display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  .bigemoji { font-size: 110px; line-height: 1; }
+  .lname { font-size: 56px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; }
+  .dots { display: flex; gap: 18px; }
+  .dots i { width: 34px; height: 34px; border-radius: 50%; background: #E2D6B4; display: block; border: 4px solid #8A7A50; }
+  .dots i.done { background: #F2C14E; border-color: #9C7A1E; }
+  .dots i.now { background: #E8873A; border-color: #9C5520; }
+  .starbig { display: flex; align-items: center; gap: 14px; font-size: 96px; font-weight: 900; }
+  .starbig svg { width: 120px; height: 120px; }
+  #guide { background: #E9DFC2; justify-content: flex-start; padding-top: 30px; overflow-y: auto; touch-action: pan-y; }
+  #fgrid { display: grid; grid-template-columns: repeat(3, 280px); gap: 22px; margin-top: 10px; padding-bottom: 40px; }
+  .fcard { width: 280px; height: 210px; background: #F7F1DE; border-radius: 22px; border: 4px solid #2E2A1E; box-shadow: 0 8px 0 #8A7A50; position: relative; display: flex; align-items: center; justify-content: center; }
+  .fcard canvas { width: 260px; height: 170px; }
+  .fcard b { position: absolute; bottom: 6px; right: 14px; font-size: 22px; color: #6B5A2E; }
+  .fcard i { position: absolute; bottom: 6px; left: 14px; font-size: 20px; font-style: normal; font-weight: 800; color: #4E3F1E; }
+  .fcard canvas { border-radius: 14px; }
+  .fcard.hop { animation: hop .5s ease; }
+  @keyframes hop { 30% { transform: translateY(-20px) scale(1.04); } 60% { transform: translateY(0) scale(.98); } }
+  #fBack { position: fixed; top: calc(16px + env(safe-area-inset-top)); left: calc(16px + env(safe-area-inset-left)); }
+  .fhead { display: flex; align-items: center; gap: 16px; font-size: 50px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; }
+  #parent { background: rgba(20,18,10,.6); }
+  #parent .card { align-items: stretch; width: min(660px, 92vw); max-height: 92vh; overflow-y: auto; touch-action: pan-y; font-size: 21px; gap: 10px; text-align: left; }
+  #parent h2 { margin: 0 0 4px; font-size: 30px; }
+  #parent label { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid #D9CBA3; }
+  #parent input[type=checkbox] { width: 32px; height: 32px; }
+  #parent select, #parent input[type=text] { font: inherit; font-size: 21px; padding: 6px 10px; border-radius: 10px; border: 2px solid #8A7A50; background: #fff; max-width: 300px; }
+  #parent .tip { font-size: 16px; color: #5E5236; margin: 4px 0; line-height: 1.35; }
+  #parent .pbtns { display: flex; gap: 12px; justify-content: space-between; margin-top: 6px; }
+  #parent .pbtns button { padding: 14px 22px; border-radius: 14px; background: #D9CBA3; font-size: 21px; font-weight: 700; }
+  #parent .pbtns .ok { background: #9DBB5A; }
+  #rotate { position: fixed; inset: 0; z-index: 30; background: #2E2A1E; color: #fff; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 30px; font-size: 34px; font-weight: 800; }
+  #rotate.on { display: flex; }
+  #rotate .ipad { width: 110px; height: 150px; border: 10px solid #fff; border-radius: 22px; animation: turn 2s ease-in-out infinite; }
+  @keyframes turn { 0%, 30% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+<canvas id="hud"></canvas>
+<div id="loading" class="on"><div class="lt">DINO RANGER</div><div class="lb"><i id="loadBar"></i></div><div class="lw" id="loadWarn"></div></div>
+
+<button id="bPause" aria-label="Pause"><svg viewBox="0 0 100 100"><rect x="22" y="16" width="20" height="68" rx="6" fill="#2E2A1E"/><rect x="58" y="16" width="20" height="68" rx="6" fill="#2E2A1E"/></svg></button>
+
+<div id="title" class="screen">
+  <div class="logo"><div class="t1">DINO RANGER</div><div class="t2">JUNGLE RUN</div></div>
+  <div class="row">
+    <button id="bGuide" class="btn khaki lg" aria-label="Field guide">
+      <svg viewBox="0 0 100 100"><circle cx="30" cy="58" r="20" fill="#2E2A1E"/><circle cx="70" cy="58" r="20" fill="#2E2A1E"/><circle cx="30" cy="58" r="11" fill="#7FB0C8"/><circle cx="70" cy="58" r="11" fill="#7FB0C8"/><rect x="40" y="46" width="20" height="14" fill="#2E2A1E"/><rect x="18" y="26" width="20" height="22" rx="5" fill="#2E2A1E"/><rect x="62" y="26" width="20" height="22" rx="5" fill="#2E2A1E"/></svg>
+    </button>
+    <button id="bPlay" class="btn xl pulse" aria-label="Play">
+      <svg viewBox="0 0 100 100"><path d="M34 20 L82 50 L34 80 Z" fill="#fff" stroke="#2E2A1E" stroke-width="6" stroke-linejoin="round"/></svg>
+    </button>
+    <div style="width:150px"></div>
+  </div>
+  <button id="bGear" aria-label="Grown-ups (hold)"><span>⚙︎</span></button>
+</div>
+
+<div id="intro" class="screen">
+  <div class="card"><div class="bigemoji" id="iEmoji">🌿</div><div class="lname" id="iName">Fern Valley</div><div class="dots" id="iDots"></div></div>
+</div>
+
+<div id="pause" class="screen dim">
+  <div class="row">
+    <button id="bHome1" class="btn slate md" aria-label="Home"><svg viewBox="0 0 100 100"><path d="M50 16 L88 50 H76 V84 H24 V50 H12 Z" fill="#fff" stroke="#2E2A1E" stroke-width="5" stroke-linejoin="round"/></svg></button>
+    <button id="bResume" class="btn xl pulse" aria-label="Keep playing"><svg viewBox="0 0 100 100"><path d="M34 20 L82 50 L34 80 Z" fill="#fff" stroke="#2E2A1E" stroke-width="6" stroke-linejoin="round"/></svg></button>
+  </div>
+</div>
+
+<div id="clear" class="screen dim">
+  <div class="card">
+    <div class="starbig"><svg viewBox="0 0 100 100"><path d="M50 6 L62 36 L94 38 L69 58 L77 90 L50 72 L23 90 L31 58 L6 38 L38 36 Z" fill="#F2C14E" stroke="#2E2A1E" stroke-width="5" stroke-linejoin="round"/></svg><span id="cStars">0</span></div>
+    <div class="dots" id="cDots"></div>
+  </div>
+  <button id="bNext" class="btn xl pulse" aria-label="Next"><svg viewBox="0 0 100 100"><path d="M34 20 L82 50 L34 80 Z" fill="#fff" stroke="#2E2A1E" stroke-width="6" stroke-linejoin="round"/></svg></button>
+</div>
+
+<div id="end" class="screen dim">
+  <div class="card">
+    <div class="bigemoji">🦖💤🏅</div>
+    <div class="starbig"><svg viewBox="0 0 100 100"><path d="M50 6 L62 36 L94 38 L69 58 L77 90 L50 72 L23 90 L31 58 L6 38 L38 36 Z" fill="#F2C14E" stroke="#2E2A1E" stroke-width="5" stroke-linejoin="round"/></svg><span id="eStars">0</span></div>
+  </div>
+  <button id="bHome2" class="btn slate lg pulse" aria-label="Home"><svg viewBox="0 0 100 100"><path d="M50 16 L88 50 H76 V84 H24 V50 H12 Z" fill="#fff" stroke="#2E2A1E" stroke-width="5" stroke-linejoin="round"/></svg></button>
+</div>
+
+<div id="rest" class="screen dim">
+  <div class="card"><div class="bigemoji">🌙🦕💤</div><div class="lname" style="font-size:36px">The dinosaurs are sleeping.</div></div>
+  <button id="bHome3" class="btn slate lg" aria-label="Home"><svg viewBox="0 0 100 100"><path d="M50 16 L88 50 H76 V84 H24 V50 H12 Z" fill="#fff" stroke="#2E2A1E" stroke-width="5" stroke-linejoin="round"/></svg></button>
+</div>
+
+<div id="guide" class="screen">
+  <button id="fBack" class="btn slate md" aria-label="Back"><svg viewBox="0 0 100 100"><path d="M62 18 L28 50 L62 82" fill="none" stroke="#fff" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  <div class="fhead">Field Guide</div>
+  <div id="fgrid"></div>
+</div>
+
+<div id="parent" class="screen">
+  <div class="card">
+    <h2>Grown-ups</h2>
+    <label>Intensity <select id="pInt"><option value="action">Action — dinosaurs charge and bite at the jeep, big roars</option><option value="gentle">Gentle — dinosaurs keep their distance</option></select></label>
+    <label>Blood splash on hits <input type="checkbox" id="pBlood"></label>
+    <label>Difficulty <select id="pDiff"><option value="easy">Easy (age 3–5)</option><option value="normal">Normal (age 5+)</option></select></label>
+    <label>Sound effects <input type="checkbox" id="pSound"></label>
+    <label>Music <input type="checkbox" id="pMusic"></label>
+    <label>Spoken ranger radio <input type="checkbox" id="pVoice"></label>
+    <label>Missions per day <select id="pRides"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="0">No limit</option></select></label>
+    <label>Child's name (spoken only) <input type="text" id="pName" maxlength="20" autocomplete="off"></label>
+    <p class="tip" id="pStat"></p>
+    <p class="tip">Aiming is exact: darts hit where you tap (Easy adds a small helper ring; Normal has none). Head hits count double. With Blood splash off, darts only put dinosaurs to sleep (they snore) and nothing bleeds. The name, stars and settings stay on this iPad only. No accounts, ads or internet calls.</p>
+    <p class="tip"><b>Lock the iPad to this game:</b> Settings → Accessibility → Guided Access → On (set a passcode). In the game, triple-click the top button → Options → Time Limit.</p>
+    <div class="pbtns"><button id="pReset">Reset today's missions</button><button id="pDone" class="ok">Done</button></div>
+    <p class="tip" id="pVer"></p>
+  </div>
+</div>
+
+<div id="rotate"><div class="ipad"></div><div>↻</div></div>
+
+<script>
+  // module scripts need http(s); if opened as a file, say how to test on the PC
+  if (location.protocol === 'file:') document.getElementById('loadWarn').textContent = 'Open through a local web server to test on the PC (see README): python -m http.server';
+  window.addEventListener('error', e => { const w = document.getElementById('loadWarn'); if (w && document.getElementById('loading').classList.contains('on')) w.textContent = 'Could not start: ' + (e.message || 'error'); });
+</script>
+<script type="module" src="js/game.js"></script>
+</body>
+</html>

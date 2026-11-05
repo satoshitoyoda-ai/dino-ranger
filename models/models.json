@@ -1,0 +1,22 @@
+{
+  "raptor": {
+    "file": "Velociraptor.fbx",
+    "length": 2.6
+  },
+  "trike": {
+    "file": "Triceratops.fbx",
+    "length": 5.6
+  },
+  "stego": {
+    "file": "Stegosaurus.fbx",
+    "length": 6.0
+  },
+  "rex": {
+    "file": "Trex.fbx",
+    "length": 11.0
+  },
+  "apato": {
+    "file": "Apatosaurus.fbx",
+    "length": 22.0
+  }
+}
