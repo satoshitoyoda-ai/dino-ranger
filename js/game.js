@@ -9,7 +9,7 @@ import { FX } from './fx.js';
 import { Convoy } from './convoy.js';
 import { audioBind, audioInit, sfx, cry, say, musicStart, musicStop, audioTick, ambOff, AC, setRain } from './audio.js';
 
-export const VERSION = '3.12.1';
+export const VERSION = '3.13.1';
 
 /* ================= settings (this device only) ================= */
 const SKEY = 'dinoRanger.v1';
@@ -430,7 +430,7 @@ function startRide(i) {
 function startLevel(i) {
   const lv = LEVELS[i];
   $('iEmoji').textContent = lv.emoji; $('iName').textContent = lv.name; dots($('iDots'), i, i);
-  G.state = 'intro'; show('intro'); say(lv.say);
+  G.state = 'intro'; G.introT = 99; G.vT = 0; show('intro'); say(lv.say);   // hold the intro until the new track is built
   setTimeout(() => { // build after the card is painted
     buildLevel(i); G.pointers.clear(); G.phase = 'ride'; G.spawnT = 2.5; G.levelScore = 0; G.energy = 100; planWeather(); G.aim = { x: W / 2, y: H * 0.45 }; G.introT = 2.4;
   }, 60);
@@ -473,6 +473,25 @@ function pauseGame() { if (G.state !== 'play') return; G.state = 'paused'; G.poi
 function resumeGame() { G.state = 'play'; show(null); musicStart(); }
 
 /* ================= jeep + camera ================= */
+const _cf = new THREE.Vector3(), _cb = new THREE.Vector3(), _ca = new THREE.Vector3();
+function camFocus(base, eye) {
+  _cb.copy(base); if (!['play', 'over'].includes(G.state)) return _cb;
+  let best = null, score = 0;
+  if (G.boss && G.boss.mode !== 'dead') { best = G.boss; score = 1; }
+  else for (const d of G.dinos) {
+    if (d.mode === 'dead' || d.mode === 'leave' || d.mode === 'gone' || d.mode === 'chargeNPC' || d.mode === 'attackNPC') continue;
+    const dist = d.pos.distanceTo(eye), ahead = _ca.copy(d.pos).sub(eye).dot(jeepF);
+    if (dist > 30 || ahead < 1) continue;
+    const sc = (d.mode === 'attack' ? 2 : d.mode === 'charge' ? 1.4 : 1) * (1 - dist / 30);
+    if (sc > score) { score = sc; best = d; }
+  }
+  if (!best) return _cb;
+  best.bodyWorld(_cf);
+  const k = best.boss ? 0.5 : clamp(score * 0.45, 0, 0.4);
+  // keep the turn moderate: limit how far sideways/up the focus may pull the view
+  _cf.sub(eye); _cb.sub(eye); const dist = _cb.length(); _cf.setLength(dist);
+  return _cb.lerp(_cf, k).add(eye);
+}
 function placeJeep(dt) {
   world.posAt(G.s, jeepPos); world.dirAt(G.s, jeepF); jeepR.crossVectors(jeepF, UP).normalize();
   const k = clamp(G.v / RIDE, 0, 1), t = G.t;
@@ -481,7 +500,10 @@ function placeJeep(dt) {
   const eye = tmp.copy(jeepPos).addScaledVector(UP, 1.85 + Math.sin(t * 9) * 0.012 * k + Math.sin(t * 3.7) * 0.02 * k).add(G.bump);
   camera.position.copy(eye);
   const look = world.posAt(G.s + 12, tmp2); look.y += 1.25; look.addScaledVector(jeepR, Math.sin(t * 0.37) * 0.25);
-  camera.lookAt(look);
+  // follow the action: lean the view toward the most pressing dinosaur (or the boss), then drift back to the road
+  const want = camFocus(look, eye);
+  if (!G.lookPt) G.lookPt = want.clone(); else G.lookPt.lerp(want, Math.min(1, dt * 2.4));
+  camera.lookAt(G.lookPt);
   camera.rotateZ(clamp(-world.curvature(G.s + 6) * 9, -0.07, 0.07) + Math.sin(t * 1.9) * 0.006 * k + G.bump.x * 0.05);
   if (G.camKick > 0.0005) { camera.rotateX(G.camKick); camera.rotateY(G.camKickV || 0); camera.position.y += G.camKick * 0.15; G.camKick *= Math.max(0, 1 - dt * 11); G.camKickV *= Math.max(0, 1 - dt * 11); }
   if (G.shake > 0) { const s = G.shake * G.shake; camera.position.x += rnd(-1, 1) * s * 0.18; camera.position.y += rnd(-1, 1) * s * 0.14; camera.rotateX(rnd(-1, 1) * s * 0.05); camera.rotateZ(rnd(-1, 1) * s * 0.05); }
