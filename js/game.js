@@ -3,13 +3,13 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { clamp, lerp, rnd, pick, weighted, ease } from './util.js';
 import { World, WEATHER } from './world.js';
-import { Dino, SPECIES, loadPack, PACK } from './dinos.js';
+import { Dino, SPECIES, loadPack, PACK, DINO_LOOK } from './dinos.js';
 import { Cockpit, makeDart } from './rifle.js';
 import { FX } from './fx.js';
 import { Convoy } from './convoy.js';
 import { audioBind, audioInit, sfx, cry, say, musicStart, musicStop, audioTick, ambOff, AC, setRain } from './audio.js';
 
-export const VERSION = '3.15.0';
+export const VERSION = '3.17.0';
 
 /* ================= settings (this device only) ================= */
 const SKEY = 'dinoRanger.v1';
@@ -75,7 +75,7 @@ function resize() {
 
 /* ================= state ================= */
 const G = { state: 'boot', level: 0, s: 0, v: 0, vT: 0, t: 0, dinos: [], bg: [], boss: null, darts: [], stuck: [], spawnT: 1, score: 0, levelScore: 0,
-  phase: 'ride', shake: 0, flash: 0, red: 0, introT: 0, doneT: 0, pointers: new Map(), hudBump: 0, aim: { x: 0, y: 0 }, birdT: 2, stars: [], pops: [], marks: [], splats: [], dmgFx: 0, fovPunch: 0, camRoll: 0, camPitch: 0, heartT: 0, camKick: 0, camKickV: 0, hitStop: 0,
+  phase: 'ride', shake: 0, flash: 0, red: 0, introT: 0, doneT: 0, pointers: new Map(), hudBump: 0, aim: { x: 0, y: 0 }, birdT: 2, stars: [], pops: [], marks: [], splats: [], ride: null, ms: null, dmgFx: 0, fovPunch: 0, camRoll: 0, camPitch: 0, heartT: 0, camKick: 0, camKickV: 0, hitStop: 0,
   bump: new THREE.Vector3(), bumpV: new THREE.Vector3(), fps: 60, fpsT: 0, fpsN: 0 };
 const jeepPos = new THREE.Vector3(), jeepF = new THREE.Vector3(), jeepR = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
 const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3();
@@ -116,18 +116,18 @@ function settle(d) {
 }
 function speciesHp(kind) { const sp = SPECIES[kind]; let hp = sp.hp; if (S.diff === 'easy') hp = Math.min(hp, 2); return hp; }
 
-function spawnDino() {
-  const lv = L(), kind = weighted(lv.kinds), sp = SPECIES[kind];
-  const pairs = kind === 'raptor' && Math.random() < 0.4 ? 2 : 1;
-  let side = Math.random() < 0.5 ? -1 : 1; if (world.env.river && sp.type !== 'flyer') side = 1;
+function spawnDino(o = {}) {
+  const lv = L(), kind = o.kind || weighted(lv.kinds), sp = SPECIES[kind];
+  const pairs = o.count || (kind === 'raptor' && Math.random() < 0.25 ? 2 : 1);
+  let side = o.side || (Math.random() < 0.5 ? -1 : 1); if (world.env.river && sp.type !== 'flyer') side = 1;
   const swamp = world.env.swamp && sp.type !== 'flyer';
-  const roleR = Math.random(), role = swamp ? 'charge' : sp.type === 'flyer' ? 'swoop' : (kind === 'stego' ? (roleR < 0.25 ? 'charge' : 'cross') : kind === 'raptor' ? (roleR < 0.6 ? 'charge' : 'cross') : (roleR < 0.5 ? 'charge' : 'cross'));
+  const roleR = Math.random(), role = o.role && !swamp && sp.type !== 'flyer' ? o.role : swamp ? 'charge' : sp.type === 'flyer' ? 'swoop' : (kind === 'stego' ? (roleR < 0.25 ? 'charge' : 'cross') : kind === 'raptor' ? (roleR < 0.6 ? 'charge' : 'cross') : (roleR < 0.5 ? 'charge' : 'cross'));
   // ambush: burst out of the trees right beside the road, close in front (Action mode, ground dinosaurs)
-  const ambush = ACT() && sp.type !== 'flyer' && !swamp && Math.random() < 0.4;
-  const ahead = ambush ? rnd(12, 20) : rnd(26, 40);
+  const ambush = o.ambush != null ? o.ambush && ACT() && sp.type !== 'flyer' && !swamp : ACT() && sp.type !== 'flyer' && !swamp && Math.random() < 0.4;
+  const ahead = (ambush ? rnd(12, 20) : rnd(26, 40)) + (o.ahead || 0);
   for (let i = 0; i < pairs; i++) {
     const d = mkDino(kind, kind === 'raptor' ? rnd(1.3, 1.6) : rnd(0.9, 1.15), Math.random() < 0.5 ? 0 : 1);
-    const s = G.s + ahead + i * 3, base = world.posAt(s), F = world.dirAt(s), R = tmp.crossVectors(F, UP).normalize();
+    const s = G.s + ahead + i * (o.gap || 3), base = world.posAt(s), F = world.dirAt(s), R = tmp.crossVectors(F, UP).normalize();
     const lat = swamp ? rnd(-2, 2) + i * 2.5 : side * (sp.type === 'flyer' ? rnd(-10, 10) : ambush ? rnd(8, 10.5) : rnd(7, 18)) + i * side * 2;
     d.pos.copy(base).addScaledVector(R, lat); d.pos.y = groundAt(d.pos);
     // every individual moves at its own pace: sprinters and plodders
@@ -144,6 +144,19 @@ function spawnDino() {
     if (d.pos.distanceTo(jeepPos) < 11) { removeDino(d); continue; }   // never pop in right next to the jeep
     G.dinos.push(d);
   }
+}
+// spawn director: irregular timing and group sizes (singles, pairs, raptor packs, mixed groups, herd crossings, lulls)
+function spawnWave() {
+  const lv = L(), kinds = Object.keys(lv.kinds), r = Math.random(), side = Math.random() < 0.5 ? -1 : 1;
+  const ground = kinds.filter(k => SPECIES[k].type !== 'flyer'), plant = ground.filter(k => k !== 'raptor');
+  let wait = D().interval * (0.45 + Math.random() * 1.3);                    // uneven gaps
+  if (r < 0.42) spawnDino();                                                   // single
+  else if (r < 0.6) { spawnDino({ side }); if (Math.random() < 0.6) spawnDino({ side: -side, ahead: rnd(2, 8) }); }   // pair, often both sides
+  else if (r < 0.74 && ground.includes('raptor')) { const n = S.diff === 'easy' ? 3 : 2 + Math.floor(Math.random() * 3); spawnDino({ kind: 'raptor', count: n, side, gap: 2.2, ambush: Math.random() < 0.6 }); wait += D().interval * 0.8; }   // raptor pack
+  else if (r < 0.84 && plant.length) { const k = pick(plant); spawnDino({ kind: k, count: 2 + (Math.random() < 0.4 ? 1 : 0), side, gap: 5, role: 'cross', ambush: false }); wait += D().interval; }   // herd crossing
+  else if (r < 0.93 && plant.length && ground.includes('raptor')) { spawnDino({ kind: pick(plant), side, role: 'charge' }); spawnDino({ kind: 'raptor', count: 2, side, ahead: -4, gap: 2 }); wait += D().interval * 0.6; }   // mixed group
+  else wait = D().interval * rnd(2.2, 3.5);                                   // lull: nothing for a while
+  G.spawnT = wait;
 }
 function spawnHerd() { // gentle background giants (not targets)
   for (const d of G.bg) removeDino(d); G.bg = [];
@@ -182,6 +195,8 @@ function setWeapon(k) { G.weapon = k; cockpit.setWeapon(k); G.cool = 0; document
 let shellGeo = null;
 function makeShell() { if (!shellGeo) { shellGeo = [new THREE.CylinderGeometry(0.05, 0.05, 0.22, 12).rotateX(Math.PI / 2), new THREE.ConeGeometry(0.05, 0.1, 12).rotateX(-Math.PI / 2).translate(0, 0, -0.16)]; shellGeo.forEach(g => (g.userData.keep = true)); shellGeo.mats = [new THREE.MeshStandardMaterial({ color: 0x55603a, roughness: 0.5 }), new THREE.MeshStandardMaterial({ color: 0xe8873a, roughness: 0.4 })]; }
   const g = new THREE.Group(); g.add(new THREE.Mesh(shellGeo[0], shellGeo.mats[0]), new THREE.Mesh(shellGeo[1], shellGeo.mats[1])); return g; }
+function newStats() { return { shots: 0, hits: 0, heads: 0, kills: 0, bites: 0, stars: 0, t: 0 }; }
+function stat(k, n = 1) { if (G.ms) G.ms[k] += n; if (G.ride) G.ride[k] += n; }
 function fire(x, y) {
   if (G.cool > 0 || G.darts.length > 36) return;
   const w = curW(); G.cool = w.cd; G.aim.x = x; G.aim.y = y;
@@ -194,6 +209,7 @@ function fire(x, y) {
     if (h) { const d = h.object.userData.dino; hit = { d, obj: h.object, local: h.object.worldToLocal(h.point.clone()), head: d.isHead(h.object, h.point) }; to = h.point.clone(); }
     else { const mp = missPoint(px, py); to = mp.p; hit = { miss: true, ground: mp.ground }; }
     const dist = from.distanceTo(to);
+    stat('shots');
     G.darts.push({ m, from: from.clone(), to, t: 0, dur: clamp(dist / (w.speed || 140), 0.05, w.splash ? 1.2 : 0.22), hit, w });
     aimDart(m, from, to);
   }
@@ -218,7 +234,7 @@ function dartArrive(dt) {
   if (hit.miss) { sfx.miss(); if (hit.ground) fx.dust(dt.to, 4, 0.25, [0.55, 0.48, 0.36]); return; }
   const d = hit.d; if (!d || d.mode === 'dead' || !d.root.parent) { sfx.miss(); return; }
   const wp = hit.obj.localToWorld(hit.local.clone()), dir = tmp2.copy(dt.to).sub(dt.from).normalize();
-  stickDart(d, hit.obj, hit.local, dir);
+  stickDart(d, hit.obj, hit.local, dir); stat('hits'); if (hit.head) stat('heads');
   damage(d, w.dmg * (hit.head ? (d.boss ? 1.5 : 2) : 1) * (d.boss ? BOSS_ARMOR : 1), wp, dir, hit.head, w.small ? 0.6 : 1);
 }
 function buzz(ms) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} }   // phones only; iPad Safari has no web vibration
@@ -241,6 +257,7 @@ function damage(d, dmg, wp, dir, head, fxK = 1) {
 }
 function explode(dt, hit) {
   const at = hit.miss ? dt.to.clone() : hit.obj.localToWorld(hit.local.clone()), w = dt.w;
+  let hitAny = false;
   sfx.boom(); G.shake = Math.max(G.shake, clamp(9 / at.distanceTo(camera.position), 0.2, 0.7)); G.flash = Math.max(G.flash, 0.25);
   fx.boom(at, 1.4);
   const dir = tmp2.copy(dt.to).sub(dt.from).normalize().clone();
@@ -251,10 +268,12 @@ function explode(dt, hit) {
     if (!direct && dist > w.splash) continue;
     const dmg = direct ? w.dmg * (hit.head ? 1.5 : 1) : Math.max(1, w.dmg * (1 - Math.max(0, dist) / w.splash));
     const dmgB = d.boss ? dmg * BOSS_ARMOR : dmg;
-    damage(d, dmgB, direct ? at : c, dir, direct && hit.head, 1.3);
+    damage(d, dmgB, direct ? at : c, dir, direct && hit.head, 1.3); hitAny = true;
   }
+  if (hitAny) stat('hits');
 }
 function killDino(d, wp, head) {
+  stat('kills');
   d.mode = 'dead'; d.setAnim('dead'); d.deadT = 0; d.speed = 0; cry(d.sp.cry, 0.9);
   if (!BLOOD()) setTimeout(() => sfx.sleepy(false), 500);
   star(wp, d.hpMax + (head ? 1 : 0)); meet(d.kind);
@@ -377,6 +396,7 @@ function updBoss(b, dt) {
   if (b.mode !== 'dead') b.heading = Math.atan2(jeepPos.x - b.pos.x, jeepPos.z - b.pos.z) + (b.sub === 'stalk' ? Math.cos(b.t * 0.55) * 0.55 : b.sub === 'roar' ? 0.6 * (b.lat >= 0 ? 1 : -1) : 0);
 }
 function bossDone() {
+  stat('kills');
   const b = G.boss; b.mode = 'dead'; b.setAnim('dead'); b.deadT = 0; G.phase = 'done'; G.doneT = 0; G.vT = 0;
   cry(b.sp.cry, 1); if (!BLOOD()) setTimeout(() => sfx.sleepy(true), 600); setTimeout(() => sfx.fanfare(), 1700);
   star(b.bodyWorld(new THREE.Vector3()), 5); meet(b.kind);
@@ -396,7 +416,7 @@ function clearLevel() {
   for (const d of G.dinos) removeDino(d); G.dinos = []; if (G.boss) { removeDino(G.boss); G.boss = null; }
   for (const dt of G.darts) scene.remove(dt.m); G.darts = []; fx.clear(); G.stars = []; G.pops = [];
 }
-function buildLevel(i) { G.level = i; clearLevel(); world.build(i); spawnHerd(); G.s = 0; G.v = 0; G.vT = 0; placeJeep(0); convoy.reset(0); }
+function buildLevel(i) { G.level = i; clearLevel(); world.build(i); spawnHerd(); G.s = 0; G.v = 0; G.vT = 0; G.lookPt = null; placeJeep(0); convoy.reset(0); }
 function toTitle() {
   G.state = 'title'; musicStop(); buildLevel(0); world.setWeather('clear', true); G.wx = ['clear']; G.s = 4; G.vT = 0.8; G.aim = { x: W / 2, y: H * 0.45 };
   for (const [k, sOff, lat] of [['raptor', 13, -4.5], ['trike', 19, 6], ['raptor', 15, -6.5], ['stego', 30, -9]]) { const d = mkDino(k); const b = world.posAt(G.s + sOff), R = world.dirAt(G.s + sOff).cross(UP).normalize(); d.pos.copy(b).addScaledVector(R, lat); d.pos.y = groundAt(d.pos); d.heading = Math.atan2(-R.x * Math.sign(lat), -R.z * Math.sign(lat)) + 0.6; d.mode = 'idle'; d.setAnim('idle'); G.dinos.push(d); }
@@ -427,14 +447,14 @@ function openCourses() {
 function startRide(i) {
   const lim = +S.ridesPerDay;
   if (lim > 0 && ridesToday() >= lim) { G.state = 'rest'; show('rest'); say("The dinosaurs are sleeping. Let's go on a new mission tomorrow" + nameBit() + '!'); return; }
-  ridesToday(); S.rides++; save(); G.score = 0; G.courseEnd = courseOf(i) * SET + SET - 1; startLevel(i);
+  ridesToday(); S.rides++; save(); G.score = 0; G.courseEnd = courseOf(i) * SET + SET - 1; G.ride = newStats(); G.ride.course = courseOf(i); G.ride.from = i; startLevel(i);
 }
 function startLevel(i) {
   const lv = LEVELS[i];
   $('iEmoji').textContent = lv.emoji; $('iName').textContent = lv.name; dots($('iDots'), i, i);
   G.state = 'intro'; G.introT = 99; G.vT = 0; show('intro'); say(lv.say);   // hold the intro until the new track is built
   setTimeout(() => { // build after the card is painted
-    buildLevel(i); G.pointers.clear(); G.phase = 'ride'; G.spawnT = 2.5; G.levelScore = 0; G.energy = 100; planWeather(); G.aim = { x: W / 2, y: H * 0.45 }; G.introT = 2.4;
+    buildLevel(i); G.pointers.clear(); G.phase = 'ride'; G.spawnT = 2.5; G.levelScore = 0; G.energy = 100; planWeather(); G.ms = newStats(); G.aim = { x: W / 2, y: H * 0.45 }; G.introT = 2.4;
   }, 60);
 }
 // jeep energy: bites drain it; at zero the mission is over (grown-ups can switch this off)
@@ -447,6 +467,7 @@ function npcHit(d, wp, dir) {
 }
 // being bitten: red edge pulse, claw scratches, blood splats, camera jolt + zoom punch, gun knocked, slow-mo, buzz
 function ouch(big) {
+  stat('bites');
   const k = big ? 1 : 0.75;
   G.dmgFx = Math.min(1.4, (G.dmgFx || 0) + k); G.fovPunch = 1; G.camRoll = (Math.random() < 0.5 ? -1 : 1) * 0.14 * k; G.camPitch = -0.08 * k;
   G.hitStop = Math.max(G.hitStop, big ? 0.1 : 0.07); cockpit.knock(); sfx.hurt(); buzz([60, 40, 90]);
@@ -459,7 +480,25 @@ function hurt(n) {
   G.energy = Math.max(0, G.energy - n); G.hurtT = 1;
   if (G.energy <= 0) gameOver();
 }
+function recordRide(done) {
+  if (!G.ride || G.ride.saved) return; G.ride.saved = true;
+  S.history = S.history || [];
+  const same = S.history.filter(h => h.course === G.ride.course), prev = same.length ? same[same.length - 1] : null;
+  const bestStars = Math.max(0, ...same.map(h => h.stars));
+  G.prevRide = prev; G.rideBest = done && same.length > 0 && G.ride.stars > bestStars;
+  const d = new Date(), e = Object.assign({}, G.ride, { date: d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'), to: G.level, done, t: Math.round(G.ride.t) });
+  delete e.saved; S.history.push(e); if (S.history.length > 40) S.history.shift(); save();
+}
+function openRecords() {
+  G.state = 'records'; const H = (S.history || []).slice().reverse(), box = $('rlist');
+  let h = '<table><tr><th>Date</th><th>Start</th><th>⭐</th><th>🎯</th><th>💥</th><th>🦖</th><th>🩹</th><th></th></tr>';
+  for (const r of H.slice(0, 12)) h += '<tr><td>' + r.date.slice(5) + '</td><td>' + (COURSES[r.course] ? COURSES[r.course].emoji + ' ' + LEVELS[r.from].name : '') + '</td><td>' + r.stars + '</td><td>' + pct(r.hits, r.shots) + '%</td><td>' + r.heads + '</td><td>' + r.kills + '</td><td>' + r.bites + '</td><td>' + (r.done ? '🏁' : '💥') + '</td></tr>';
+  if (!H.length) h += '<tr><td colspan="8">No rides yet. Go play!</td></tr>';
+  h += '</table><div class="bests">' + LEVELS.map((lv, i) => '<span>' + lv.emoji + ' ' + lv.name + ': ⭐ ' + ((S.best && S.best[i]) || 0) + '</span>').join('') + '</div>';
+  box.innerHTML = h; show('records');
+}
 function gameOver() {
+  if (G.ride) recordRide(false);
   G.state = 'over'; G.vT = 0; G.pointers.clear(); musicStop(); show('over');
   say('Oh no! The jeep is out of energy. Tap play to try again, ranger' + nameBit() + '!');
 }
@@ -474,10 +513,21 @@ function planWeather() {
 }
 world.onLightning = () => { G.flash = Math.max(G.flash, 0.6); setTimeout(() => sfx.thunder(), 150); };
 function beginPlay() { G.state = 'play'; G.vT = RIDE; show(null); musicStart(); }
+const pct = (a, b) => (b ? Math.round(a / b * 100) : 0);
+function statRow(st, prev) {
+  const acc = pct(st.hits, st.shots), pacc = prev ? pct(prev.hits, prev.shots) : null;
+  const cmp = (v, p, better = 1) => p == null ? '' : v === p ? ' <i class="eq">=</i>' : ((v > p) === (better > 0) ? ' <i class="up">▲</i>' : ' <i class="dn">▼</i>');
+  return '<span title="stars">⭐ ' + st.stars + cmp(st.stars, prev && prev.stars) + '</span><span title="accuracy">🎯 ' + acc + '%' + cmp(acc, pacc) + '</span>' +
+    '<span title="head shots">💥 ' + st.heads + cmp(st.heads, prev && prev.heads) + '</span><span title="dinosaurs">🦖 ' + st.kills + cmp(st.kills, prev && prev.kills) + '</span><span title="bites">🩹 ' + st.bites + cmp(st.bites, prev && prev.bites, -1) + '</span>';
+}
 function levelClear() {
-  S.totalStars += G.levelScore; save(); musicStop();
+  S.totalStars += G.levelScore; musicStop();
+  S.lastMission = S.lastMission || {}; const prevM = S.lastMission[G.level]; if (G.ms) { S.lastMission[G.level] = Object.assign({}, G.ms); $('cStats').innerHTML = statRow(G.ms, prevM); }
+  const newBest = G.levelScore > ((S.best && S.best[G.level]) || 0) && prevM; $('cBest').style.display = newBest ? 'block' : 'none';
+  if (G.level >= Math.min(LEVELS.length - 1, G.courseEnd ?? 2)) recordRide(true);
+  save();
   S.best = S.best || {}; S.best[G.level] = Math.max(S.best[G.level] || 0, G.levelScore); save();
-  if (G.level >= Math.min(LEVELS.length - 1, G.courseEnd ?? 2)) { G.state = 'end'; $('eStars').textContent = G.score; show('end'); setTimeout(() => say((BLOOD() ? 'Mission complete! You stopped every dinosaur. Great job, ranger' : 'Mission complete! All the dinosaurs are safe and sleeping. Great job, ranger') + nameBit() + '!'), 400); return; }
+  if (G.level >= Math.min(LEVELS.length - 1, G.courseEnd ?? 2)) { G.state = 'end'; $('eStars').textContent = G.score; $('eStats').innerHTML = G.ride ? statRow(G.ride, G.prevRide) : ''; $('eBest').style.display = G.rideBest ? 'block' : 'none'; show('end'); setTimeout(() => say((BLOOD() ? 'Mission complete! You stopped every dinosaur. Great job, ranger' : 'Mission complete! All the dinosaurs are safe and sleeping. Great job, ranger') + nameBit() + '!'), 400); return; }
   G.state = 'clear'; $('cStars').textContent = G.levelScore; dots($('cDots'), G.level + 1, G.level); show('clear');
 }
 function pauseGame() { if (G.state !== 'play') return; G.state = 'paused'; G.pointers.clear(); musicStop(); show('pause'); }
@@ -513,7 +563,7 @@ function placeJeep(dt) {
   const look = world.posAt(G.s + 12, tmp2); look.y += 1.25; look.addScaledVector(jeepR, Math.sin(t * 0.37) * 0.25);
   // follow the action: lean the view toward the most pressing dinosaur (or the boss), then drift back to the road
   const want = camFocus(look, eye);
-  if (!G.lookPt) G.lookPt = want.clone(); else G.lookPt.lerp(want, Math.min(1, dt * 2.4));
+  if (!G.lookPt || G.lookPt.distanceTo(want) > 25) G.lookPt = want.clone(); else G.lookPt.lerp(want, Math.min(1, dt * 2.4));   // snap after a jump (new level)
   camera.lookAt(G.lookPt);
   camera.rotateZ(clamp(-world.curvature(G.s + 6) * 9, -0.07, 0.07) + Math.sin(t * 1.9) * 0.006 * k + G.bump.x * 0.05);
   if (Math.abs(G.camRoll) > 0.001 || Math.abs(G.camPitch) > 0.001) { camera.rotateZ(G.camRoll); camera.rotateX(G.camPitch); G.camRoll *= Math.max(0, 1 - dt * 5); G.camPitch *= Math.max(0, 1 - dt * 5); }
@@ -542,7 +592,7 @@ function update(dt) {
     if (G.phase === 'ride') {
       G.spawnT -= dt;
       const active = G.dinos.filter(d => d.mode !== 'dead' && d.mode !== 'leave').length;
-      if (G.spawnT <= 0 && G.s < env.len - 30) { if (active < D().max) spawnDino(); G.spawnT = D().interval * rnd(0.7, 1.3); }
+      if (G.spawnT <= 0 && G.s < env.len - 30) { if (active < D().max + 2) spawnWave(); else G.spawnT = 0.6; }
       if (G.s >= env.len) spawnBoss();
       if (G.s >= G.wxAt && G.wx[1]) { world.setWeather(G.wx[1]); G.wxAt = 1e9; say(WX_SAY[G.wx[1]], false); }
     }
@@ -561,8 +611,12 @@ function update(dt) {
   ndc.set(G.aim.x / W * 2 - 1, -(G.aim.y / H) * 2 + 1); ray.setFromCamera(ndc, camera);
   const dc = ray.ray.direction.clone().applyQuaternion(camera.quaternion.clone().invert());
   cockpit.aimAt(dc, dt); cockpit.update(dt);
-  fx.update(dt); world.update(dt, camera); if (AC) setRain(live && G.state !== 'title' ? world.wx.rain : 0);
-  for (const s of G.stars) { s.t += dt; if (s.t >= s.dur && !s.done) { s.done = true; G.score++; G.levelScore++; G.hudBump = 1; sfx.ding(); } }
+  fx.update(dt); world.update(dt, camera);
+  // dinosaur visibility: stronger rim light in dark missions and bad weather
+  if (world.env) { const dark = world.env.trees || world.env.volcano || world.env.swamp ? 0.42 : 0.28, w = world.wx || { dark: 0, fogK: 1 };
+    DINO_LOOK.rim.value = dark + w.dark * 0.35 + (1 - w.fogK) * 0.25; DINO_LOOK.lift.value = (world.env.trees || world.env.volcano ? 0.09 : 0.05) + w.dark * 0.06; DINO_LOOK.fog.value = 0.6 - (1 - w.fogK) * 0.15; } if (AC) setRain(live && G.state !== 'title' ? world.wx.rain : 0);
+  if (G.state === 'play' && G.ms) { G.ms.t += dt; if (G.ride) G.ride.t += dt; }
+  for (const s of G.stars) { s.t += dt; if (s.t >= s.dur && !s.done) { s.done = true; G.score++; G.levelScore++; stat('stars'); G.hudBump = 1; sfx.ding(); } }
   G.stars = G.stars.filter(s => !s.done); for (const m of G.marks) m.t += dt; G.marks = G.marks.filter(m => m.t < 0.22);
   G.dmgFx = Math.max(0, G.dmgFx - dt * 1.1); if (G.scratch) { G.scratch.t += dt; if (G.scratch.t > 1.3) G.scratch = null; }
   for (const sp of G.splats) sp.t += dt; G.splats = G.splats.filter(sp => sp.t < 2.4);
@@ -653,14 +707,14 @@ const up = e => G.pointers.delete(e.pointerId);
 cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up); cv.addEventListener('lostpointercapture', up);
 document.addEventListener('pointerdown', audioInit, true);
 ['gesturestart', 'gesturechange', 'contextmenu', 'dblclick', 'selectstart'].forEach(ev => document.addEventListener(ev, e => e.preventDefault()));
-document.addEventListener('touchmove', e => { if (!e.target.closest('#guide, #parent .card')) e.preventDefault(); }, { passive: false });
+document.addEventListener('touchmove', e => { if (!e.target.closest('#guide, #parent .card, #records')) e.preventDefault(); }, { passive: false });
 function tapBtn(id, fn) { $(id).addEventListener('click', e => { e.preventDefault(); audioInit(); sfx.ui(); fn(); }); }
 tapBtn('bPlay', openCourses); tapBtn('cBack', () => { G.state = 'title'; show('title'); }); tapBtn('bPause', pauseGame); tapBtn('bResume', resumeGame);
 tapBtn('bNext', () => startLevel(G.level + 1));
 tapBtn('bRetry', () => { G.score -= G.levelScore; startLevel(G.level); });
 tapBtn('bHome4', toTitle);
 tapBtn('bHome1', toTitle); tapBtn('bHome2', toTitle); tapBtn('bHome3', toTitle);
-tapBtn('bGuide', openGuide);
+tapBtn('bGuide', openGuide); tapBtn('bRecords', openRecords); tapBtn('rBack', () => { G.state = 'title'; show('title'); });
 for (const [k, w] of Object.entries(WEAPONS)) { const b = document.createElement('button'); b.dataset.w = k; b.textContent = w.icon; b.setAttribute('aria-label', w.name); b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); audioInit(); sfx.ui(); setWeapon(k); }); $('weapons').appendChild(b); }
 setWeapon('rifle');
 tapBtn('fBack', () => { G.state = 'title'; show('title'); });

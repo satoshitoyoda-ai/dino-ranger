@@ -31,6 +31,25 @@ SPECIES.bigStego = Object.assign({}, SPECIES.stego, { base: 'stego', hp: 10, cry
 SPECIES.alphaRaptor = Object.assign({}, SPECIES.raptor, { base: 'raptor', hp: 10, cry: 'screech' });
 SPECIES.kingRex = Object.assign({}, SPECIES.rex, { base: 'rex', hp: 16, cry: 'roar' });
 
+/* ---------------- visibility: rim light, lighter fog, lifted shadows ---------------- */
+export const DINO_LOOK = { rim: { value: 0.4 }, rimColor: { value: new THREE.Color(0xfff0d6) }, fog: { value: 0.6 }, lift: { value: 0.07 } };
+function dinoLook(m) {
+  if (m.userData.dinoLook) return m; m.userData.dinoLook = true;
+  m.onBeforeCompile = sh => {
+    sh.uniforms.uRim = DINO_LOOK.rim; sh.uniforms.uRimCol = DINO_LOOK.rimColor; sh.uniforms.uFogK = DINO_LOOK.fog; sh.uniforms.uLift = DINO_LOOK.lift;
+    sh.fragmentShader = 'uniform float uRim; uniform vec3 uRimCol; uniform float uFogK; uniform float uLift;' + String.fromCharCode(10) + sh.fragmentShader
+      .replace('#include <opaque_fragment>', `float rimF = pow(1.0 - clamp(dot(normalize(normal), normalize(vViewPosition)), 0.0, 1.0), 2.8);
+        outgoingLight += uRimCol * rimF * uRim + diffuseColor.rgb * uLift;
+        #include <opaque_fragment>`)
+      .replace('#include <fog_fragment>', `#ifdef USE_FOG
+        float fogF = smoothstep( fogNear, fogFar, vFogDepth ) * uFogK;
+        gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogF );
+        #endif`);
+  };
+  m.customProgramCacheKey = () => 'dinoLook';
+  return m;
+}
+
 /* ---------------- skin textures ---------------- */
 const texCache = {};
 function skinTex(key, pal, opts = {}) {
@@ -320,6 +339,7 @@ export class Dino {
     const base = sp.base || kind, pack = PACK[base];
     if (pack && sp.type !== 'flyer') this.fromPack(pack); else this.procedural(opts.variant || 0);
     this.root.scale.setScalar(this.size);
+    this.root.traverse(o => { if (o.isMesh && o !== this.blob) { if (Array.isArray(o.material)) o.material.forEach(dinoLook); else if (o.material && o.material.isMeshStandardMaterial) dinoLook(o.material); } });
     this.hitMeshes = []; this.root.traverse(o => { if (o.isMesh) { o.userData.dino = this; if (!o.userData.part) o.userData.part = 'body'; this.hitMeshes.push(o); } });
     // soft contact shadow so the animal looks planted even in shade
     if (sp.type !== 'flyer') { const b = new THREE.Mesh(BLOB_G, blobMat()); b.scale.set(this.dims.halfW * 3.2 + 0.4, this.dims.len * 0.62, 1); b.position.y = 0.05; b.renderOrder = 1; b.raycast = () => {}; b.castShadow = false; this.root.add(b); this.blob = b; }

@@ -69,6 +69,13 @@
   .starbig { display: flex; align-items: center; gap: 14px; font-size: 96px; font-weight: 900; }
   .starbig svg { width: 120px; height: 120px; }
   #courses { background: rgba(20,18,10,.55); gap: 22px; }
+  .stats { display: flex; gap: 18px; font-size: 30px; font-weight: 800; flex-wrap: wrap; justify-content: center; }
+  .stats i { font-style: normal; font-size: 22px; } .stats .up { color: #2f9e3a; } .stats .dn { color: #c8402a; } .stats .eq { color: #8a7a50; }
+  .best { display: none; font-size: 30px; font-weight: 900; color: #E8873A; animation: pulse 1s ease-in-out infinite; }
+  #records { background: #E9DFC2; justify-content: flex-start; padding-top: 30px; overflow-y: auto; touch-action: pan-y; }
+  #rBack { position: fixed; top: calc(16px + env(safe-area-inset-top)); left: calc(16px + env(safe-area-inset-left)); }
+  #rlist { font-size: 22px; } #rlist table { border-collapse: collapse; } #rlist td, #rlist th { padding: 6px 14px; text-align: center; border-bottom: 1px solid #D9CBA3; }
+  #rlist .bests { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 12px; font-size: 19px; font-weight: 700; justify-content: center; }
   #courses .fhead { color: #fff; text-shadow: 0 3px 0 #2E2A1E; }
   #clist { display: flex; flex-direction: column; gap: 22px; }
   .course { background: #F3EBD3; border: 5px solid #2E2A1E; border-radius: 26px; padding: 14px 20px 18px; box-shadow: 0 10px 0 #8A7A50; }
@@ -125,7 +132,7 @@
     <button id="bPlay" class="btn xl pulse" aria-label="Play">
       <svg viewBox="0 0 100 100"><path d="M34 20 L82 50 L34 80 Z" fill="#fff" stroke="#2E2A1E" stroke-width="6" stroke-linejoin="round"/></svg>
     </button>
-    <div style="width:150px"></div>
+    <button id="bRecords" class="btn khaki lg" aria-label="Records"><span style="font-size:72px;line-height:1">🏆</span></button>
   </div>
   <button id="bGear" aria-label="Grown-ups (hold)"><span>⚙︎</span></button>
 </div>
@@ -144,6 +151,7 @@
 <div id="clear" class="screen dim">
   <div class="card">
     <div class="starbig"><svg viewBox="0 0 100 100"><path d="M50 6 L62 36 L94 38 L69 58 L77 90 L50 72 L23 90 L31 58 L6 38 L38 36 Z" fill="#F2C14E" stroke="#2E2A1E" stroke-width="5" stroke-linejoin="round"/></svg><span id="cStars">0</span></div>
+    <div class="stats" id="cStats"></div><div class="best" id="cBest">New best!</div>
     <div class="dots" id="cDots"></div>
   </div>
   <button id="bNext" class="btn xl pulse" aria-label="Next"><svg viewBox="0 0 100 100"><path d="M34 20 L82 50 L34 80 Z" fill="#fff" stroke="#2E2A1E" stroke-width="6" stroke-linejoin="round"/></svg></button>
@@ -153,6 +161,7 @@
   <div class="card">
     <div class="bigemoji">🦖💤🏅</div>
     <div class="starbig"><svg viewBox="0 0 100 100"><path d="M50 6 L62 36 L94 38 L69 58 L77 90 L50 72 L23 90 L31 58 L6 38 L38 36 Z" fill="#F2C14E" stroke="#2E2A1E" stroke-width="5" stroke-linejoin="round"/></svg><span id="eStars">0</span></div>
+    <div class="stats" id="eStats"></div><div class="best" id="eBest">New best ride!</div>
   </div>
   <button id="bHome2" class="btn slate lg pulse" aria-label="Home"><svg viewBox="0 0 100 100"><path d="M50 16 L88 50 H76 V84 H24 V50 H12 Z" fill="#fff" stroke="#2E2A1E" stroke-width="5" stroke-linejoin="round"/></svg></button>
 </div>
@@ -168,6 +177,12 @@
 <div id="rest" class="screen dim">
   <div class="card"><div class="bigemoji">🌙🦕💤</div><div class="lname" style="font-size:36px">The dinosaurs are sleeping.</div></div>
   <button id="bHome3" class="btn slate lg" aria-label="Home"><svg viewBox="0 0 100 100"><path d="M50 16 L88 50 H76 V84 H24 V50 H12 Z" fill="#fff" stroke="#2E2A1E" stroke-width="5" stroke-linejoin="round"/></svg></button>
+</div>
+
+<div id="records" class="screen">
+  <button id="rBack" class="btn slate md" aria-label="Back"><svg viewBox="0 0 100 100"><path d="M62 18 L28 50 L62 82" fill="none" stroke="#fff" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  <div class="fhead">🏆 Records</div>
+  <div id="rlist" class="card"></div>
 </div>
 
 <div id="courses" class="screen">
