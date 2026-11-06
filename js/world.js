@@ -3,28 +3,29 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { clamp, lerp, smooth, fbm, vnoise, rng, canvasTex, detailTexture, radialTex } from './util.js';
+import { jeepModel } from './convoy.js';
 
 export const ENV = [
   { // Fern Valley: sunny jungle valley
-    seed: 11, len: 420, curve: [[9, 52, 0.3], [4, 21, 1.4]], hills: [[2.4, 38, 0], [1.1, 16, 2]],
+    seed: 11, len: 420, trees: { n: 3, k: 1.6, near: 0.75, giants: 18 },  curve: [[9, 52, 0.3], [4, 21, 1.4]], hills: [[2.4, 38, 0], [1.1, 16, 2]],
     skyTop: 0x5f97c8, skyHor: 0xd9e6d6, fog: 0xc9d8c4, fogNear: 22, fogFar: 175, sunDir: [0.5, 0.75, 0.35], sunCol: 0xfff1d6, sunI: 3.0,
     hemiSky: 0xcfe2ff, hemiGround: 0x4a5a2a, hemiI: 1.15, grass: [0x55702f, 0x7e9a45], dirt: 0x8b6b45, rock: 0x7d7a6e, leaf: [0x2f5a26, 0x4f8034], bark: 0x5a4330, mtn: 0x8fa79c,
     veg: { broad: 240, palm: 170, fern: 800, grass: 1300, rock: 110, dead: 0 }, motes: 0xfff6c8,
   },
   { // River Gorge: river on the left, cliffs on the right
-    seed: 23, len: 430, curve: [[7, 60, 0.5], [3, 26, 2.0]], hills: [[0.9, 34, 1]], river: true, waterY: -1.5,
+    seed: 23, len: 430, trees: { n: 3, k: 1.6, near: 0.75, giants: 18 },  curve: [[7, 60, 0.5], [3, 26, 2.0]], hills: [[0.9, 34, 1]], river: true, waterY: -1.5,
     skyTop: 0x4f8fc4, skyHor: 0xdfe9e8, fog: 0xc8d8dc, fogNear: 25, fogFar: 195, sunDir: [-0.45, 0.7, 0.2], sunCol: 0xfff3dc, sunI: 3.0,
     hemiSky: 0xcfe6ff, hemiGround: 0x52603a, hemiI: 1.1, grass: [0x5a7231, 0x86a050], dirt: 0x94754e, rock: 0x9a8a72, leaf: [0x35602e, 0x52813a], bark: 0x5a4330, mtn: 0x8b9ea6,
     veg: { broad: 150, palm: 170, fern: 600, grass: 1100, rock: 220, dead: 0 }, motes: 0xffffff,
   },
   { // Volcano Ridge: dusk, ash, smoking volcano ahead
-    seed: 37, len: 440, curve: [[10, 48, 2.0], [5, 20, 0.4]], hills: [[3.2, 44, 0.5], [1.3, 18, 1]], volcano: true,
+    seed: 37, len: 440, trees: { n: 3, k: 1.6, near: 0.75, giants: 18 },  curve: [[10, 48, 2.0], [5, 20, 0.4]], hills: [[3.2, 44, 0.5], [1.3, 18, 1]], volcano: true,
     skyTop: 0x3c3458, skyHor: 0xf09a5c, fog: 0xc98a68, fogNear: 14, fogFar: 150, sunDir: [-0.6, 0.22, -0.75], sunCol: 0xffb070, sunI: 2.4,
     hemiSky: 0xffc39a, hemiGround: 0x4a4030, hemiI: 1.35, grass: [0x4a5c28, 0x6e7c3e], dirt: 0x7a5e42, rock: 0x5e5654, leaf: [0x2e4a26, 0x45683a], bark: 0x3e3226, mtn: 0x6e5a66,
     veg: { broad: 90, palm: 110, fern: 450, grass: 900, rock: 200, dead: 110 }, motes: 0xff9a50,
   },
   { // Misty Marsh: raised causeway through swamp water on both sides
-    seed: 51, len: 430, curve: [[8, 56, 1.1], [3, 23, 0.2]], hills: [[0.5, 40, 0]], swamp: true, waterY: -1.1,
+    seed: 51, len: 430, trees: { n: 3, k: 1.6, near: 0.75, giants: 18 },  curve: [[8, 56, 1.1], [3, 23, 0.2]], hills: [[0.5, 40, 0]], swamp: true, waterY: -1.1,
     skyTop: 0x6f8f98, skyHor: 0xcfd8cc, fog: 0xb7c4b4, fogNear: 12, fogFar: 120, sunDir: [0.3, 0.6, 0.5], sunCol: 0xfff0d0, sunI: 2.5,
     hemiSky: 0xd8e4dc, hemiGround: 0x3e4a2c, hemiI: 1.25, grass: [0x4a5f2c, 0x6d8040], dirt: 0x6e5a3c, rock: 0x6e6a5c, leaf: [0x30502a, 0x4e7036], bark: 0x4a3a2a, mtn: 0x8a9a92,
     veg: { broad: 70, palm: 160, fern: 700, grass: 1200, rock: 120, dead: 70 }, motes: 0xfffbd0,
@@ -60,6 +61,7 @@ export class World {
     this.root = null; this.env = null; this.time = 0;
     this.windU = { value: 0 };
     this.quality = 1;
+    this.trees = { n: 1, k: 1, near: 1, giants: 0 };   // tree count / size / closeness / giant emergent trees (tunable)
     // lights (persist across missions)
     this.hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 1); this.scene.add(this.hemi);
     this.sun = new THREE.DirectionalLight(0xffffff, 3);
@@ -107,6 +109,7 @@ export class World {
   build(i) {
     this.dispose();
     const E = this.env = ENV[i];
+    this.trees = Object.assign({ n: 1, k: 1, near: 1, giants: 0 }, E.trees);   // dense jungle on the jungle missions (v3.6)
     this.root = new THREE.Group(); this.scene.add(this.root);
     this.scene.fog = new THREE.Fog(E.fog, E.fogNear, E.fogFar);
     this.scene.background = new THREE.Color(E.fog);
@@ -114,7 +117,7 @@ export class World {
     this.sun.color.set(E.sunCol); this.sun.intensity = E.sunI * 0.75;
     this.sunDir = new THREE.Vector3(...E.sunDir).normalize();
     this.base = { sunI: this.sun.intensity, hemiI: this.hemi.intensity, fog: new THREE.Color(E.fog), top: new THREE.Color(E.skyTop), hor: new THREE.Color(E.skyHor) };
-    this.buildSky(); this.buildTerrain(); this.buildVeg();
+    this.buildSky(); this.buildTerrain(); this.planRuins(); this.buildVeg(); this.buildRuins();
     if (E.river || E.swamp) this.buildWater();
     if (E.volcano) this.buildVolcano();
     this.buildMotes();
@@ -310,6 +313,7 @@ export class World {
         const z = -s, x = this.xr(s) + side * d, h = this.height(x, z);
         if ((E.river || E.swamp) && h < E.waterY + 0.25 && !opts.water) continue;
         if (opts.side && side !== opts.side) continue;
+        if (this.ruinSpots && !opts.water && this.ruinSpots.some(q => (q.x - x) ** 2 + (q.z - z) ** 2 < q.r * q.r)) continue;
         out.push([x, h, z]); }
       return out; };
     // instanced meshes are split into 40 m chunks along the track so frustum + distance culling can skip them
@@ -328,8 +332,11 @@ export class World {
     };
     const leafCol = c => c.copy(leafA).lerp(leafB, r()).multiplyScalar(0.85 + r() * 0.3);
     const v = E.veg;
-    if (v.broad) inst([{ geo: V.broadTrunk, mat: bark, cast: true }, { geo: V.broadCrown, mat: crownM, cast: true, color: leafCol }], place(Math.round(v.broad * q), 9, 120, { pow: 1.6 }), [0.8, 1.35], 0.06);
-    if (v.palm) inst([{ geo: V.palmTrunk, mat: bark, cast: true }, { geo: V.palmCrown, mat: frondM, cast: true, color: c => c.copy(leafA).lerp(leafB, r()).multiplyScalar(0.9 + r() * 0.4) }], place(Math.round(v.palm * q), 6.5, 90, { pow: 1.5 }), [0.7, 1.3], 0.05);
+    const TR = this.trees, tk = TR.k, tn = TR.n * q;
+    const broadP = [{ geo: V.broadTrunk, mat: bark, cast: true }, { geo: V.broadCrown, mat: crownM, cast: true, color: leafCol }];
+    if (v.broad) inst(broadP, place(Math.round(v.broad * tn), 9 * TR.near, 120, { pow: 1.6 }), [0.8 * tk, 1.35 * tk], 0.06);
+    if (v.broad && TR.giants) inst(broadP, place(Math.round(TR.giants * q), 14, 70, { pow: 1.2 }), [2.2, 2.9], 0.04);   // emergent giants
+    if (v.palm) inst([{ geo: V.palmTrunk, mat: bark, cast: true }, { geo: V.palmCrown, mat: frondM, cast: true, color: c => c.copy(leafA).lerp(leafB, r()).multiplyScalar(0.9 + r() * 0.4) }], place(Math.round(v.palm * tn), 6.5 * TR.near, 90, { pow: 1.5 }), [0.7 * tk, 1.3 * tk], 0.05);
     if (v.fern) inst([{ geo: V.fern, mat: frondM, color: c => c.copy(leafB).lerp(leafA, r() * 0.6).multiplyScalar(1.0 + r() * 0.3) }], place(Math.round(v.fern * q), 3.9, 40, { pow: 1.8 }), [0.8, 1.6]);
     if (v.grass) inst([{ geo: V.grass, mat: grassM, color: c => c.set(E.grass[1]).lerp(new THREE.Color(E.grass[0]), r() * 0.7).multiplyScalar(1.15) }], place(Math.round(v.grass * q), 3.7, 30, { pow: 2 }), [0.8, 1.5]);
     if (v.rock) { inst([{ geo: V.rock, mat: rockM, cast: true }], place(Math.round(v.rock * 0.7), 4.5, 70, { water: true }), [0.4, 1.4], 0.5); inst([{ geo: V.rock, mat: rockM, cast: true }], place(Math.round(v.rock * 0.3), 14, 90, { water: true }), [2.0, 4.5], 0.5); }
@@ -357,6 +364,80 @@ export class World {
       const p = this.rain.geometry.attributes.position, a = p.array, fall = 20 * dt;
       for (let i = 0; i < a.length; i += 6) { let y = a[i + 1] - fall; if (y < 0) y += 24; a[i + 1] = y; a[i + 4] = y + 0.6; }
       p.needsUpdate = true; }
+  }
+
+  /* ---------- ruins: abandoned ranger outposts (our own design), overgrown ---------- */
+  planRuins() {
+    const E = this.env, r = rng(E.seed * 17 + 3), kinds = ['bunker', 'fence', 'tower', 'bunker', 'wreck', 'fence', 'bunker', 'tower'];
+    this.ruinSpots = [];
+    for (let i = 0; i < 6; i++) {
+      const s = 45 + (i + r() * 0.6) * (E.len - 60) / 6, kind = kinds[(i + E.seed) % kinds.length];
+      let side = r() < 0.5 ? -1 : 1; if (E.river) side = 1;
+      const lat = kind === 'fence' ? 6.2 + r() * 1.5 : kind === 'wreck' ? 6.5 + r() * 2 : 8.5 + r() * 3;
+      const base = this.posAt(s), f = this.dirAt(s), R = new THREE.Vector3().crossVectors(f, new THREE.Vector3(0, 1, 0)).normalize();
+      const p = base.clone().addScaledVector(R, side * lat); p.y = this.height(p.x, p.z);
+      if (E.swamp && p.y < E.waterY + 0.3) continue;
+      this.ruinSpots.push({ s, kind, side, lat, x: p.x, z: p.z, y: p.y, f, r: kind === 'fence' ? 4 : kind === 'wreck' ? 4 : 8, rs: r() });
+    }
+  }
+  buildRuins() {
+    const E = this.env, r = rng(E.seed * 13 + 1);
+    const M = {
+      con: new THREE.MeshStandardMaterial({ color: 0x8e8a80, roughness: 0.95, map: this.detail }),
+      moss: new THREE.MeshStandardMaterial({ color: 0x6f7a52, roughness: 0.95, map: this.detail }),
+      rust: new THREE.MeshStandardMaterial({ color: 0x7a4a2a, roughness: 0.75, metalness: 0.35 }),
+      vine: new THREE.MeshStandardMaterial({ color: E.leaf[0], roughness: 0.9, side: THREE.DoubleSide }),
+      wood: new THREE.MeshStandardMaterial({ color: 0x5a4632, roughness: 0.95 }),
+      dark: new THREE.MeshStandardMaterial({ color: 0x1e1c1a, roughness: 1 }),
+    };
+    const cluster = (kind) => {
+      const parts = { con: [], moss: [], rust: [], vine: [], wood: [], dark: [] };
+      const box = (m, w, h, d, x, y, z, rx = 0, ry = 0, rz = 0) => { const g = new THREE.BoxGeometry(w, h, d); g.rotateX(rx); g.rotateY(ry); g.rotateZ(rz); g.translate(x, y, z); parts[m].push(g); };
+      const cyl = (m, rad, h, x, y, z, rx = 0, rz = 0) => { const g = new THREE.CylinderGeometry(rad, rad, h, 6); g.rotateX(rx); g.rotateZ(rz); g.translate(x, y, z); parts[m].push(g); };
+      const wall = (x0, z0, x1, z1, H, holeAt = -1) => { // broken wall: continuous slab with a jagged, crumbling top
+        const L = Math.hypot(x1 - x0, z1 - z0), n = Math.max(3, Math.round(L / 0.55)), ang = Math.atan2(z1 - z0, x1 - x0), ph = r() * 10;
+        for (let i = 0; i < n; i++) { const u = (i + 0.5) / n; if (holeAt >= 0 && Math.abs(u - (holeAt + 0.5) / 3) < 0.09) continue;   // doorway gap
+          const h = H * (0.5 + 0.35 * Math.sin(u * 5 + ph) + 0.15 * Math.sin(u * 17 + ph * 2)) * (r() < 0.06 ? 0.4 : 1) + r() * 0.15;
+          box(r() < 0.22 ? 'moss' : 'con', L / n + 0.03, h + 0.5, 0.32, lerp(x0, x1, u), h / 2 - 0.25, lerp(z0, z1, u), 0, -ang, 0);
+          if (h > H * 0.6 && r() < 0.18) cyl('rust', 0.02, 0.7, lerp(x0, x1, u), h + 0.25, lerp(z0, z1, u), r() - 0.5, r() - 0.5); }
+        for (let i = 0; i < 3; i++) { const u = r(); box('vine', 0.05, H * (0.4 + 0.4 * r()), 0.6 + r(), lerp(x0, x1, u), H * 0.35, lerp(z0, z1, u), 0, -ang + Math.PI / 2, 0); }
+        // window slot: dark recess near the top of the tallest stretch
+        if (L > 3 && r() < 0.7) { const u = 0.3 + r() * 0.4; box('dark', 0.9, 0.5, 0.34, lerp(x0, x1, u), H * 0.55, lerp(z0, z1, u), 0, -ang, 0); }
+      };
+      if (kind === 'bunker') {
+        const w = 6 + r() * 3, d = 5 + r() * 2, H = 3.6 + r() * 1.6;
+        if (r() < 0.5) { wall(-w / 2, -d / 2, w * 0.1, -d / 2, H * 1.8, 1); box('con', w * 0.55, 0.3, d * 0.5, -w * 0.2, H * 1.05, -d * 0.2, 0, 0, 0.12); }   // broken upper storey
+        wall(-w / 2, -d / 2, w / 2, -d / 2, H, 2); wall(w / 2, -d / 2, w / 2, d / 2, H); wall(w / 2, d / 2, -w / 2, d / 2, H * 0.7, 1); wall(-w / 2, d / 2, -w / 2, -d / 2, H * 0.5);
+        box('con', w * 0.7, 0.25, d * 0.8, -0.3, H * 0.55, 0.2, 0.25 + r() * 0.2, r() * 0.3, 0.35);           // collapsed roof slab
+        for (let i = 0; i < 8; i++) box(r() < 0.5 ? 'con' : 'moss', 0.3 + r() * 0.7, 0.25 + r() * 0.4, 0.3 + r() * 0.6, (r() - 0.5) * (w + 3), 0.15, (r() - 0.5) * (d + 3), r(), r() * 3, r());
+      } else if (kind === 'fence') {
+        const n = 9, step = 2.6;
+        for (let i = 0; i < n; i++) { const z = (i - n / 2) * step, lean = r() < 0.25 ? (r() - 0.5) * 1.4 : (r() - 0.5) * 0.15, fallen = r() < 0.12;
+          if (fallen) box('con', 0.35, 0.35, 4.2, 0.6 + r(), 0.2, z, 0, 0.6 * (r() - 0.5), 0);
+          else { box('con', 0.35, 4.2, 0.35, 0, 1.9, z, 0, 0, lean); if (i < n - 1 && r() < 0.8) for (const y of [1.2, 2.2, 3.2]) cyl('rust', 0.025, step * 1.02, Math.sin(lean) * y * 0.5, y - 0.15 - r() * 0.3, z + step / 2, Math.PI / 2, 0); } }
+        for (let i = 0; i < 5; i++) box('vine', 0.05, 1 + r() * 2, 1 + r() * 2, 0.2, 1, (r() - 0.5) * n * step);
+      } else if (kind === 'tower') {
+        const g = new THREE.Group(), H = 7 + r() * 2;
+        for (const [x, z] of [[-1.2, -1.2], [1.2, -1.2], [-1.2, 1.2], [1.2, 1.2]]) cyl('rust', 0.12, H, x, H / 2, z);
+        box('wood', 3.2, 0.2, 3.2, 0, H, 0); box('rust', 3.6, 0.12, 3.6, 0, H + 1.8, 0, 0.15, 0, -0.1);
+        for (const [x, z] of [[-1.5, -1.5], [1.5, 1.5], [1.5, -1.5]]) cyl('rust', 0.06, 1.8, x, H + 0.9, z);
+        box('wood', 0.1, 1.0, 3.2, -1.55, H + 0.5, 0); box('vine', 0.05, H * 0.7, 1.4, 1.25, H * 0.4, 1.3);
+        void g;
+      }
+      const grp = new THREE.Group();
+      for (const k in parts) { if (!parts[k].length) continue; const m = new THREE.Mesh(mergeGeometries(parts[k]), M[k]); m.castShadow = true; m.receiveShadow = true; grp.add(m); }
+      if (kind === 'tower') grp.rotation.z = (r() - 0.5) * 0.35;
+      return grp;
+    };
+    this.ruinList = [];
+    for (const sp of this.ruinSpots) {
+      const { s, kind, side, lat, f } = sp, p = new THREE.Vector3(sp.x, sp.y, sp.z);
+      let o;
+      if (kind === 'wreck') { o = jeepModel(); o.traverse(m => { if (m.isMesh) { m.material = m.material.clone(); m.material.color.lerp(new THREE.Color(0x6a3a20), 0.7); m.material.roughness = 0.9; } }); o.rotation.set(0, r() * 6, 1.35 * (r() < 0.5 ? 1 : -1)); o.position.y = 0.6; const w = new THREE.Group(); w.add(o); o = w; }
+      else o = cluster(kind);
+      o.position.add(p); o.position.y -= 0.1; o.rotation.y += Math.atan2(f.x, f.z) + (kind === 'fence' ? 0 : r() * 6);
+      this.root.add(o); this.ruinList.push({ s, kind, side, lat });
+    }
   }
 
   /* ---------- per-frame ---------- */

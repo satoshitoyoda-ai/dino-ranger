@@ -290,7 +290,13 @@ function pbr(m) {
 // low-poly packs ship flat (faceted) normals: weld vertices and recompute smooth normals once per model
 function smoothAll(root) {
   root.traverse(o => { if (!o.isMesh) return; try {
-    const g = o.geometry; g.deleteAttribute('normal'); const m = mergeVertices(g, 1e-4); m.computeVertexNormals(); m.groups = g.groups; o.geometry = m;
+    const g = o.geometry; g.deleteAttribute('normal'); const m = mergeVertices(g, 1e-4); m.computeVertexNormals();
+    // regroup triangles by material: FBX gives hundreds of tiny groups (one draw call each)
+    const groups = g.groups.length ? g.groups : [{ start: 0, count: m.index.count, materialIndex: 0 }], idx = m.index.array, byMat = new Map();
+    for (const gr of groups) { if (!byMat.has(gr.materialIndex)) byMat.set(gr.materialIndex, []); const arr = byMat.get(gr.materialIndex); for (let i = gr.start; i < gr.start + gr.count; i++) arr.push(idx[i]); }
+    const out = []; m.clearGroups(); let st = 0;
+    for (const [mi, arr] of [...byMat.entries()].sort((a, b) => a[0] - b[0])) { for (const v of arr) out.push(v); m.addGroup(st, arr.length, mi); st += arr.length; }
+    m.setIndex(out); o.geometry = m;
   } catch (e) { o.geometry.computeVertexNormals(); } });
 }
 function findClip(clips, re) { return clips.find(c => re.test(c.name)); }

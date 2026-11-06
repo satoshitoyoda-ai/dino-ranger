@@ -1,7 +1,7 @@
 // Offline cache. Bump VERSION on every release so devices pick up the new files.
-const VERSION = 'dino-ranger-v3.5.0';
+const VERSION = 'dino-ranger-v3.8.0';
 const FILES = ['./', './index.html', './manifest.json', './icon-180.png', './icon-192.png', './icon-512.png',
-  './js/game.js', './js/world.js', './js/dinos.js', './js/rifle.js', './js/fx.js', './js/audio.js', './js/util.js',
+  './js/game.js', './js/world.js', './js/dinos.js', './js/rifle.js', './js/fx.js', './js/audio.js', './js/util.js', './js/convoy.js',
   './lib/three.module.js', './lib/three.core.js', './lib/addons/loaders/GLTFLoader.js', './lib/addons/utils/BufferGeometryUtils.js', './lib/addons/utils/SkeletonUtils.js',
   './lib/addons/loaders/FBXLoader.js', './lib/addons/libs/fflate.module.js', './lib/addons/curves/NURBSCurve.js', './lib/addons/curves/NURBSUtils.js',
   './models/models.json'];

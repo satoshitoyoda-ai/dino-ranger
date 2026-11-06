@@ -73,6 +73,7 @@ export const sfx = {
   launch() { tone(90, 0.3, 'sine', 0.45, 40); noise(0.35, 0.3, 500, 0, 'bandpass', 0.8); },
   boom() { tone(48, 1.1, 'sine', 0.8, 22); noise(1.2, 0.55, 220, 0, 'lowpass', 0.7); noise(0.25, 0.3, 1800, 0, 'bandpass', 0.6); },
   thunder() { const d = 0.3 + Math.random() * 0.6; noise(2.6, 0.5, 140, d, 'lowpass', 0.6); tone(38, 2.2, 'sine', 0.35, 26, d); noise(0.4, 0.25, 900, d, 'bandpass', 0.5); },
+  npc() { tone(170, 0.1, 'sine', 0.1, 60); noise(0.06, 0.05, 2200, 0, 'highpass', 0.7); },
   dart() { tone(150, 0.14, 'sine', 0.4, 45); noise(0.09, 0.22, 2000, 0, 'highpass', 0.7); noise(0.3, 0.05, 5000, 0.04, 'highpass', 0.5); },
   thunk(head) { tone(head ? 140 : 105, 0.18, 'sine', 0.45, 40); noise(0.08, 0.22, 450, 0, 'lowpass', 1); if (S.blood !== false) noise(0.14, 0.12, 800, 0.02, 'bandpass', 2.5); if (head) tone(880, 0.08, 'triangle', 0.06, null, 0.03); },
   miss() { tone(90, 0.1, 'sine', 0.15, 50); noise(0.14, 0.12, 400, 0, 'lowpass', 0.7); },

@@ -6,9 +6,10 @@ import { World, WEATHER } from './world.js';
 import { Dino, SPECIES, loadPack, PACK } from './dinos.js';
 import { Cockpit, makeDart } from './rifle.js';
 import { FX } from './fx.js';
+import { Convoy } from './convoy.js';
 import { audioBind, audioInit, sfx, cry, say, musicStart, musicStop, audioTick, ambOff, AC, setRain } from './audio.js';
 
-export const VERSION = '3.5.0';
+export const VERSION = '3.8.0';
 
 /* ================= settings (this device only) ================= */
 const SKEY = 'dinoRanger.v1';
@@ -62,6 +63,7 @@ const scene = world.scene;
 const camera = new THREE.PerspectiveCamera(60, 1, 0.05, 1400); scene.add(camera);
 const cockpit = new Cockpit(camera);
 const fx = new FX(scene);
+const convoy = new Convoy(scene);   // Ranger Two's jeep
 let W = 0, H = 0;
 function resize() {
   W = window.innerWidth; H = window.innerHeight;
@@ -114,6 +116,9 @@ function spawnDino() {
     d.vmax = rnd(sp.speed[0], sp.speed[1]) * D().speedMul; d.gait = d.vmax > (sp.type === 'thero' ? 3.4 : 3.0) ? 'run' : 'walk';
     d.mode = role; d.hp = speciesHp(kind); d.hpMax = d.hp; d.side = side; d.t = 0; d.stun = 0; d.cried = false; d.leapRoll = kind === 'raptor' && Math.random() < 0.5;
     if (role === 'cross') { const tgtS = s - rnd(4, 14), Rb = world.dirAt(tgtS).cross(UP).normalize(); d.goal = world.posAt(tgtS).addScaledVector(Rb, -side * (world.env.river ? 4.5 : rnd(10, 22))); }
+    if (kind === 'raptor' && role === 'charge' && ACT() && !swamp && Math.random() < 0.35) { // this one hunts Ranger Two's jeep
+      d.mode = 'chargeNPC'; d.attackingConvoy = true; const cs = convoy.s + rnd(10, 20), cb = world.posAt(cs), cR = world.dirAt(cs).cross(UP).normalize();
+      d.pos.copy(cb).addScaledVector(cR, side * rnd(8, 15)); d.pos.y = groundAt(d.pos); }
     if (sp.type === 'flyer') { d.alt = rnd(9, 14); d.pos.y += d.alt; d.setAnim('fly'); d.lane = rnd(-3.5, 3.5); }
     else d.setAnim(d.gait);
     d.heading = Math.atan2(jeepPos.x - d.pos.x, jeepPos.z - d.pos.z);
@@ -256,6 +261,17 @@ function updDino(d, dt) {
       if (!d.bit && d.animT > 0.38) { d.bit = true; if (dist < reach + 1.5) biteHit(d, d.dims.len * d.size > 5); }
       if (d.animT > 0.85) { d.mode = 'leave'; d.t = 0; d.leaveSide = (jeepR.dot(tmp2.copy(d.pos).sub(jeepPos)) >= 0 ? 1 : -1); d.setAnim('run'); }
       break; }
+    case 'chargeNPC': {
+      const cp = convoy.root.position, cd = Math.hypot(cp.x - d.pos.x, cp.z - d.pos.z);
+      turnTo(d, cp.x + convoy.fwd.x * 2, cp.z + convoy.fwd.z * 2, 3, dt); stepFwd(d, (d.vmax + convoy.v * 0.6) * slow, dt); d.setAnim(d.gait);
+      if (cd < 3.4) { d.mode = 'attackNPC'; d.t = 0; d.bit = false; d.setAnim('attack'); }
+      if (d.t > 14) { d.mode = 'leave'; d.t = 0; d.leaveSide = d.side; }
+      break; }
+    case 'attackNPC': {
+      const cp = convoy.root.position; d.speed = 0; turnTo(d, cp.x, cp.z, 4, dt); d.pos.addScaledVector(convoy.fwd, convoy.v * dt);
+      if (!d.bit && d.animT > 0.38) { d.bit = true; convoy.hitBy(); sfx.npc(); if (Math.random() < 0.4) say('Ranger Two here! A raptor is on our jeep!', false); }
+      if (d.animT > 1.0) { d.leaps = (d.leaps || 0) + 1; if (d.leaps < 2) { d.mode = 'chargeNPC'; d.t = 0; } else { d.mode = 'leave'; d.t = 0; d.leaveSide = d.side; d.setAnim('run'); } }
+      break; }
     case 'stare': d.speed = 0; d.setAnim('idle'); turnTo(d, jeepPos.x, jeepPos.z, 2, dt); d.pos.addScaledVector(jeepF, G.v * dt); if (d.t > 1.4) { d.mode = 'leave'; d.t = 0; d.leaveSide = d.side; d.setAnim('walk'); } break;
     case 'cross': {
       const r = turnTo(d, d.goal.x, d.goal.z, 1.6, dt); void r; stepFwd(d, d.vmax * slow, dt); d.setAnim(d.gait);
@@ -347,7 +363,7 @@ function clearLevel() {
   for (const d of G.dinos) removeDino(d); G.dinos = []; if (G.boss) { removeDino(G.boss); G.boss = null; }
   for (const dt of G.darts) scene.remove(dt.m); G.darts = []; fx.clear(); G.stars = []; G.pops = [];
 }
-function buildLevel(i) { G.level = i; clearLevel(); world.build(i); spawnHerd(); G.s = 0; G.v = 0; G.vT = 0; placeJeep(0); }
+function buildLevel(i) { G.level = i; clearLevel(); world.build(i); spawnHerd(); G.s = 0; G.v = 0; G.vT = 0; placeJeep(0); convoy.reset(0); }
 function toTitle() {
   G.state = 'title'; musicStop(); buildLevel(0); world.setWeather('clear', true); G.wx = ['clear']; G.s = 4; G.vT = 0.8; G.aim = { x: W / 2, y: H * 0.45 };
   for (const [k, sOff, lat] of [['raptor', 13, -4.5], ['trike', 19, 6], ['raptor', 15, -6.5], ['stego', 30, -9]]) { const d = mkDino(k); const b = world.posAt(G.s + sOff), R = world.dirAt(G.s + sOff).cross(UP).normalize(); d.pos.copy(b).addScaledVector(R, lat); d.pos.y = groundAt(d.pos); d.heading = Math.atan2(-R.x * Math.sign(lat), -R.z * Math.sign(lat)) + 0.6; d.mode = 'idle'; d.setAnim('idle'); G.dinos.push(d); }
@@ -389,6 +405,13 @@ function startLevel(i) {
   }, 60);
 }
 // jeep energy: bites drain it; at zero the mission is over (grown-ups can switch this off)
+// Ranger Two's darts: they make dinosaurs flinch; only raptors attacking their jeep can be put down (no stars for the player)
+const NPC_LINES = ['Ranger Two here! Dinosaurs ahead!', 'We see raptors on the left!', 'Nice shooting, partner!', 'Watch out, one is coming your way!', 'Ranger Two, still rolling!'];
+function npcHit(d, wp, dir) {
+  if (BLOOD()) fx.blood(wp, dir, 0.7, 10); else fx.puff(wp, 0.25);
+  d.hitT = 0.3; d.stun = 0.4;
+  if (d.attackingConvoy && !d.boss) { d.hp -= 1; if (d.hp <= 0) { d.mode = 'dead'; d.setAnim('dead'); d.deadT = 0; d.speed = 0; cry(d.sp.cry, 0.5); } }
+}
 function hurt(n) {
   if (!S.energy || G.state !== 'play' || G.phase === 'done') return;
   G.energy = Math.max(0, G.energy - n); G.hurtT = 1;
@@ -444,6 +467,8 @@ function update(dt) {
   G.v += (G.vT - G.v) * Math.min(1, dt * 1.4); G.s += G.v * dt;
   if ((G.state === 'title' || G.state === 'courses') && G.s > 30) G.s = 4;
   placeJeep(dt);
+  convoy.update(dt, { world, s: G.s, v: G.v, phase: G.phase, state: G.state, targets: G.boss ? G.dinos.concat([G.boss]) : G.dinos,
+    onHit: npcHit, sfx: () => sfx.npc(), say: () => say(pick(NPC_LINES), false) });
   if (G.state === 'intro') { G.introT -= dt; if (G.introT <= 0) beginPlay(); }
   if (G.state === 'play') {
     const env = world.env;
@@ -618,7 +643,12 @@ function checkOrient() { const portraitMode = H > W * 1.05; $('rotate').classLis
 document.addEventListener('visibilitychange', () => { if (document.hidden) { pauseGame(); musicStop(); ambOff(); } else if (AC && AC.state !== 'running') AC.resume().catch(() => {}); });
 window.addEventListener('resize', resize);
 window.addEventListener('orientationchange', () => setTimeout(resize, 200));
-if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  // when a new version has been cached, reload once so the update shows straight away (not on the next open)
+  const hadSW = !!navigator.serviceWorker.controller; let reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadSW && !reloaded && ['title', 'courses', 'rest', 'boot'].includes(G.state)) { reloaded = true; location.reload(); } });
+  navigator.serviceWorker.register('sw.js').then(r => r.update()).catch(() => {});
+}
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
 
 (async function boot() {
