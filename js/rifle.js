@@ -84,6 +84,16 @@ export class Cockpit {
     add(new THREE.BoxGeometry(0.03, 0.1, 0.04), metal, 0, -0.04, -0.05, 0.2);
     add(new THREE.BoxGeometry(0.03, 0.1, 0.04), metal, 0, -0.04, -0.4, 0.2);
     add(new THREE.BoxGeometry(0.04, 0.05, 0.08), metal, 0.075, 0.08, -0.25);
+    // rotary machine gun: spinning barrel cluster, housing, ammo box with belt
+    grp('mg');
+    add(new THREE.BoxGeometry(0.11, 0.11, 0.32), metal, 0, 0.03, -0.08);
+    add(new THREE.BoxGeometry(0.12, 0.13, 0.16), olive || metal, 0.1, -0.03, -0.05);
+    const brl = new THREE.Group(); brl.position.set(0, 0.03, -0.24); tgt.add(brl); this.mgBarrels = brl;
+    for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2, m = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.011, 0.66, 8), metalL); m.rotation.x = Math.PI / 2; m.position.set(Math.cos(a) * 0.03, Math.sin(a) * 0.03, -0.33); brl.add(m); }
+    for (const z of [-0.12, -0.5]) { const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.03, 14), metal); ring.rotation.x = Math.PI / 2; ring.position.z = z; brl.add(ring); }
+    add(new THREE.CylinderGeometry(0.052, 0.052, 0.025, 14), orange, 0, 0.03, -0.93, Math.PI / 2);
+    for (const s of [-1, 1]) add(new THREE.CylinderGeometry(0.014, 0.014, 0.16, 8), metal, s * 0.08, 0.0, 0.1, 0, 0, Math.PI / 2);
+    for (let i = 0; i < 6; i++) add(new THREE.BoxGeometry(0.02, 0.025, 0.035), orange, 0.07 + i * 0.012, -0.04 - i * 0.02, -0.08, 0, 0, -0.5);
     tgt = body;
     // gloves + sleeves
     const g1 = add(new THREE.SphereGeometry(0.05, 14, 10), glove, 0.0, -0.075, -0.03); g1.scale.set(0.9, 0.8, 1.3);
@@ -122,15 +132,17 @@ export class Cockpit {
   }
   setWeapon(k) {
     for (const n in this.models) this.models[n].visible = n === k;
-    const z = { rifle: -0.9, rapid: -0.68, spread: -0.8, cannon: -0.9 }[k] || -0.9, y = k === 'cannon' ? 0.05 : 0.03;
+    const z = { rifle: -0.9, rapid: -0.68, spread: -0.8, cannon: -0.9, mg: -0.98 }[k] || -0.9, y = k === 'cannon' ? 0.05 : 0.03;
     this.muzzle.position.set(0, y, z); this.flash.position.set(0, y, z - 0.05); this.light.position.set(0, y + 0.02, z - 0.1);
-    this.kickAmt = { rifle: 1, rapid: 0.45, spread: 1.4, cannon: 1.8 }[k] || 1; this.flashSize = { rifle: 1, rapid: 0.7, spread: 1.5, cannon: 2.2 }[k] || 1;
+    this.kickAmt = { rifle: 1, rapid: 0.45, spread: 1.4, cannon: 1.8, mg: 0.6 }[k] || 1; this.flashSize = { rifle: 1, rapid: 0.7, spread: 1.5, cannon: 2.2, mg: 1.3 }[k] || 1;
   }
-  fire() { this.kick = 1; this.flashT = 0.07; this.flash.material.rotation = Math.random() * 6; }
+  knock() { this.knockT = 1; this.knockDir = Math.random() < 0.5 ? -1 : 1; }
+  fire() { this.spin = 1; this.kick = 1; this.flashT = 0.07; this.flash.material.rotation = Math.random() * 6; }
   update(dt) {
-    this.kick = Math.max(0, this.kick - dt * 7); this.flashT = Math.max(0, this.flashT - dt);
+    this.knockT = Math.max(0, (this.knockT || 0) - dt * 2.2); const kn = this.knockT * this.knockT;
+    this.kick = Math.max(0, this.kick - dt * 7); this.spin = Math.max(0, (this.spin || 0) - dt * 1.5); if (this.mgBarrels) this.mgBarrels.rotation.z += dt * 40 * this.spin; this.flashT = Math.max(0, this.flashT - dt);
     const k = this.kick * this.kick;
-    const ka = this.kickAmt || 1, sh = this.kick > 0.6 ? (Math.random() - 0.5) * 0.01 * ka : 0; this.gunBody.position.set(sh, k * 0.02 * ka, k * 0.11 * ka); this.gunBody.rotation.set(k * 0.2 * ka, sh * 2, this.cant + sh * 3);
+    const ka = this.kickAmt || 1, sh = this.kick > 0.6 ? (Math.random() - 0.5) * 0.01 * ka : 0; this.gunBody.position.set(sh + kn * 0.12 * (this.knockDir || 1), k * 0.02 * ka - kn * 0.14, k * 0.11 * ka + kn * 0.05); this.gunBody.rotation.set(k * 0.2 * ka - kn * 0.35, sh * 2 + kn * 0.3 * (this.knockDir || 1), this.cant + sh * 3 + kn * 0.6 * (this.knockDir || 1));
     this.flash.material.opacity = this.flashT > 0 ? 1 : 0; const s = (0.2 + Math.random() * 0.15) * (this.flashSize || 1); this.flash.scale.set(s, s, 1);
     this.light.intensity = this.flashT > 0 ? 6 : 0;
   }

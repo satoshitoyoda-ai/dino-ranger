@@ -9,7 +9,7 @@ import { FX } from './fx.js';
 import { Convoy } from './convoy.js';
 import { audioBind, audioInit, sfx, cry, say, musicStart, musicStop, audioTick, ambOff, AC, setRain } from './audio.js';
 
-export const VERSION = '3.13.1';
+export const VERSION = '3.15.0';
 
 /* ================= settings (this device only) ================= */
 const SKEY = 'dinoRanger.v1';
@@ -68,14 +68,14 @@ let W = 0, H = 0;
 function resize() {
   W = window.innerWidth; H = window.innerHeight;
   renderer.setPixelRatio(PR); renderer.setSize(W, H, false);
-  camera.aspect = W / H; camera.fov = W / H < 1.3 ? 66 : 60; camera.updateProjectionMatrix();
+  camera.aspect = W / H; camera.fov = W / H < 1.3 ? 66 : 60; G.baseFov = camera.fov; camera.updateProjectionMatrix();
   const dpr = Math.min(window.devicePixelRatio || 1, 2); hud.width = Math.round(W * dpr); hud.height = Math.round(H * dpr); hx.setTransform(dpr, 0, 0, dpr, 0, 0);
   fx.setScale(H * PR); checkOrient();
 }
 
 /* ================= state ================= */
 const G = { state: 'boot', level: 0, s: 0, v: 0, vT: 0, t: 0, dinos: [], bg: [], boss: null, darts: [], stuck: [], spawnT: 1, score: 0, levelScore: 0,
-  phase: 'ride', shake: 0, flash: 0, red: 0, introT: 0, doneT: 0, pointers: new Map(), hudBump: 0, aim: { x: 0, y: 0 }, birdT: 2, stars: [], pops: [], marks: [], camKick: 0, camKickV: 0, hitStop: 0,
+  phase: 'ride', shake: 0, flash: 0, red: 0, introT: 0, doneT: 0, pointers: new Map(), hudBump: 0, aim: { x: 0, y: 0 }, birdT: 2, stars: [], pops: [], marks: [], splats: [], dmgFx: 0, fovPunch: 0, camRoll: 0, camPitch: 0, heartT: 0, camKick: 0, camKickV: 0, hitStop: 0,
   bump: new THREE.Vector3(), bumpV: new THREE.Vector3(), fps: 60, fpsT: 0, fpsN: 0 };
 const jeepPos = new THREE.Vector3(), jeepF = new THREE.Vector3(), jeepR = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
 const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3();
@@ -173,6 +173,7 @@ const WEAPONS = {
   rifle:  { kick: 0.035, buzz: 15, icon: '🎯', name: 'Dart rifle', cd: 0.3, dmg: 1, pellets: 1, spread: 0, sfx: 'dart' },
   rapid:  { kick: 0.012, buzz: 6, icon: '⚡', name: 'Rapid darts', cd: 0.11, dmg: 0.4, pellets: 1, spread: 7, sfx: 'rapid', small: true },
   spread: { kick: 0.065, buzz: 30, icon: '✴️', name: 'Spread gun', cd: 0.8, dmg: 0.6, pellets: 6, spread: 34, sfx: 'spread', small: true },
+  mg:     { kick: 0.02, buzz: 8, icon: '🔥', name: 'Machine gun', cd: 0.07, dmg: 0.45, pellets: 1, spread: 12, sfx: 'mg', small: true },
   cannon: { kick: 0.11, buzz: 60, icon: '💥', name: 'Sleepy cannon', cd: 1.4, dmg: 3, pellets: 1, spread: 0, sfx: 'launch', splash: 5, speed: 55 },
 };
 const BOSS_ARMOR = 0.4;   // bosses shrug off most of each hit: they take endurance to bring down
@@ -265,6 +266,7 @@ function turnTo(d, tx, tz, rate, dt) { rate /= Math.sqrt(Math.max(1, d.mass || 1
 function stepFwd(d, sp, dt) { d.speed += (sp - d.speed) * Math.min(1, dt * 5 / (d.mass || 1)); d.pos.x += Math.sin(d.heading) * d.speed * dt; d.pos.z += Math.cos(d.heading) * d.speed * dt; }
 function biteHit(d, big) {
   if (!ACT()) return;
+  ouch(big || d.boss);
   hurt(d.boss ? (S.diff === 'easy' ? 7 : 10) : big ? (S.diff === 'easy' ? 10 : 15) : (S.diff === 'easy' ? 9 : 15));
   const side = Math.sign(jeepR.dot(tmp.copy(d.pos).sub(jeepPos))) || 1;
   G.shake = Math.max(G.shake, big ? 0.75 : 0.5); G.flash = 0.35; G.red = BLOOD() ? 0.35 : 0;
@@ -443,6 +445,15 @@ function npcHit(d, wp, dir) {
   d.hitT = 0.3; d.stun = 0.4;
   if (d.attackingConvoy && !d.boss) { d.hp -= 1; if (d.hp <= 0) { d.mode = 'dead'; d.setAnim('dead'); d.deadT = 0; d.speed = 0; cry(d.sp.cry, 0.5); } }
 }
+// being bitten: red edge pulse, claw scratches, blood splats, camera jolt + zoom punch, gun knocked, slow-mo, buzz
+function ouch(big) {
+  const k = big ? 1 : 0.75;
+  G.dmgFx = Math.min(1.4, (G.dmgFx || 0) + k); G.fovPunch = 1; G.camRoll = (Math.random() < 0.5 ? -1 : 1) * 0.14 * k; G.camPitch = -0.08 * k;
+  G.hitStop = Math.max(G.hitStop, big ? 0.1 : 0.07); cockpit.knock(); sfx.hurt(); buzz([60, 40, 90]);
+  const a = rnd(-0.5, 0.5); G.scratch = { t: 0, a, x: W * rnd(0.3, 0.7), y: H * rnd(0.3, 0.6) };
+  if (BLOOD()) for (let i = 0; i < (big ? 7 : 5); i++) { const edge = Math.random() < 0.5; G.splats.push({ x: edge ? (Math.random() < 0.5 ? rnd(0, W * 0.2) : rnd(W * 0.8, W)) : rnd(0, W), y: edge ? rnd(0, H) : rnd(0, H * 0.25), r: rnd(25, 75) * k, t: 0, drip: rnd(30, 90) }); }
+  if (Math.random() < 0.3) say(pick(['Hang on, ranger!', 'Ouch! Keep firing!', "We're okay! Shoot it!"]), false);
+}
 function hurt(n) {
   if (!S.energy || G.state !== 'play' || G.phase === 'done') return;
   G.energy = Math.max(0, G.energy - n); G.hurtT = 1;
@@ -505,6 +516,8 @@ function placeJeep(dt) {
   if (!G.lookPt) G.lookPt = want.clone(); else G.lookPt.lerp(want, Math.min(1, dt * 2.4));
   camera.lookAt(G.lookPt);
   camera.rotateZ(clamp(-world.curvature(G.s + 6) * 9, -0.07, 0.07) + Math.sin(t * 1.9) * 0.006 * k + G.bump.x * 0.05);
+  if (Math.abs(G.camRoll) > 0.001 || Math.abs(G.camPitch) > 0.001) { camera.rotateZ(G.camRoll); camera.rotateX(G.camPitch); G.camRoll *= Math.max(0, 1 - dt * 5); G.camPitch *= Math.max(0, 1 - dt * 5); }
+  if (G.fovPunch > 0.001) { G.fovPunch = Math.max(0, G.fovPunch - dt * 3); camera.fov = G.baseFov * (1 - 0.1 * Math.sin(G.fovPunch * Math.PI)); camera.updateProjectionMatrix(); }
   if (G.camKick > 0.0005) { camera.rotateX(G.camKick); camera.rotateY(G.camKickV || 0); camera.position.y += G.camKick * 0.15; G.camKick *= Math.max(0, 1 - dt * 11); G.camKickV *= Math.max(0, 1 - dt * 11); }
   if (G.shake > 0) { const s = G.shake * G.shake; camera.position.x += rnd(-1, 1) * s * 0.18; camera.position.y += rnd(-1, 1) * s * 0.14; camera.rotateX(rnd(-1, 1) * s * 0.05); camera.rotateZ(rnd(-1, 1) * s * 0.05); }
 }
@@ -550,7 +563,10 @@ function update(dt) {
   cockpit.aimAt(dc, dt); cockpit.update(dt);
   fx.update(dt); world.update(dt, camera); if (AC) setRain(live && G.state !== 'title' ? world.wx.rain : 0);
   for (const s of G.stars) { s.t += dt; if (s.t >= s.dur && !s.done) { s.done = true; G.score++; G.levelScore++; G.hudBump = 1; sfx.ding(); } }
-  G.stars = G.stars.filter(s => !s.done); for (const m of G.marks) m.t += dt; G.marks = G.marks.filter(m => m.t < 0.22); for (const p of G.pops) p.t += dt; G.pops = G.pops.filter(p => p.t < 0.9);
+  G.stars = G.stars.filter(s => !s.done); for (const m of G.marks) m.t += dt; G.marks = G.marks.filter(m => m.t < 0.22);
+  G.dmgFx = Math.max(0, G.dmgFx - dt * 1.1); if (G.scratch) { G.scratch.t += dt; if (G.scratch.t > 1.3) G.scratch = null; }
+  for (const sp of G.splats) sp.t += dt; G.splats = G.splats.filter(sp => sp.t < 2.4);
+  if (S.energy && G.state === 'play' && G.energy < 30 && (G.heartT -= dt) <= 0) { G.heartT = 0.9; sfx.heart(); } for (const p of G.pops) p.t += dt; G.pops = G.pops.filter(p => p.t < 0.9);
   G.shake = Math.max(0, G.shake - dt); G.flash = Math.max(0, G.flash - dt * 2); G.red = Math.max(0, G.red - dt * 1.5); G.hudBump = Math.max(0, G.hudBump - dt * 3); G.hurtT = Math.max(0, (G.hurtT || 0) - dt * 2);
 }
 
@@ -559,7 +575,16 @@ function rr(x, y, w, h, r) { hx.beginPath(); hx.moveTo(x + r, y); hx.arcTo(x + w
 function starShape(x, y, r, fill, stroke) { hx.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, q = i % 2 ? r * 0.48 : r; hx.lineTo(x + Math.cos(a) * q, y + Math.sin(a) * q); } hx.closePath(); hx.fillStyle = fill; hx.fill(); if (stroke) { hx.strokeStyle = stroke; hx.lineWidth = Math.max(2, r * 0.14); hx.lineJoin = 'round'; hx.stroke(); } }
 function drawHUD() {
   hx.clearRect(0, 0, W, H);
-  if (G.red > 0) { hx.fillStyle = 'rgba(150,10,10,' + (G.red * 0.35) + ')'; hx.fillRect(0, 0, W, H); }
+  if (G.red > 0) { hx.fillStyle = 'rgba(150,10,10,' + (G.red * 0.25) + ')'; hx.fillRect(0, 0, W, H); }
+  // damage edge pulse (+ steady pulse when energy is low)
+  const low = S.energy && G.state === 'play' && G.energy < 30 ? 0.18 + 0.12 * Math.sin(G.t * 6) : 0, dv = Math.min(1, G.dmgFx * 0.6 + low);
+  if (dv > 0.01) { const g2 = hx.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, H * 0.85); g2.addColorStop(0, 'rgba(160,0,0,0)'); g2.addColorStop(1, (BLOOD() ? 'rgba(170,0,0,' : 'rgba(255,255,255,') + dv + ')'); hx.fillStyle = g2; hx.fillRect(0, 0, W, H); }
+  for (const sp of G.splats) { const a = Math.max(0, 1 - sp.t / 2.4) * 0.8, dr = Math.min(1, sp.t / 1.5) * sp.drip; hx.fillStyle = 'rgba(110,0,0,' + a + ')'; hx.beginPath(); hx.arc(sp.x, sp.y, sp.r, 0, 7); hx.fill(); hx.fillRect(sp.x - sp.r * 0.15, sp.y, sp.r * 0.3, sp.r * 0.4 + dr); hx.beginPath(); hx.arc(sp.x, sp.y + sp.r * 0.4 + dr, sp.r * 0.15, 0, 7); hx.fill(); }
+  if (G.scratch) { const c = G.scratch, a = Math.max(0, 1 - c.t / 1.3), L = Math.min(W, H) * 0.55 * Math.min(1, c.t * 8);
+    hx.save(); hx.translate(c.x, c.y); hx.rotate(c.a + 0.6); hx.lineCap = 'round';
+    for (let i = -1; i <= 1; i++) { hx.strokeStyle = (BLOOD() ? 'rgba(90,0,0,' : 'rgba(40,40,40,') + a * 0.85 + ')'; hx.lineWidth = 9; hx.beginPath(); hx.moveTo(-L / 2, i * 38); hx.quadraticCurveTo(0, i * 38 + 25, L / 2, i * 38 + 10); hx.stroke();
+      hx.strokeStyle = 'rgba(255,230,220,' + a * 0.5 + ')'; hx.lineWidth = 2; hx.stroke(); }
+    hx.restore(); }
   if (G.flash > 0) { hx.fillStyle = 'rgba(255,255,240,' + (G.flash * 0.45) + ')'; hx.fillRect(0, 0, W, H); }
   const vg = hx.createRadialGradient(W / 2, H * 0.45, H * 0.5, W / 2, H * 0.45, H * 1.0); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.3)'); hx.fillStyle = vg; hx.fillRect(0, 0, W, H);
   for (const p of G.pointers.values()) {

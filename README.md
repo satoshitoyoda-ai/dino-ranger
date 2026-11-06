@@ -24,10 +24,11 @@ An original dinosaur ride game in the arcade light-gun style, now in real 3D. Ri
 - **Pick a course and level (v3.5):** ▶ on the title opens *Pick a course*. There are two courses with 3 levels each. Tap any level to start there; the ride continues to the end of that course. Each card shows the boss type and your best stars for that level. One ride counts once toward the daily limit, whichever level you start on.
   - 🌴 **Jungle Trail:** 1 Fern Valley (giant Triceratops), 2 River Gorge (Spinosaurus), 3 Volcano Ridge (T. rex).
   - 🗺️ **Wild Lands:** 1 Misty Marsh (swamp causeway, giant Stegosaurus), 2 Red Canyon (red cliffs, Alpha Raptor), 3 Sunset Plains (golden grassland with big herds, King Rex).
-- **Four weapons (v3.3)** — the round buttons bottom-left switch them any time:
+- **Five weapons (v3.3, machine gun added v3.15)** — the round buttons bottom-left switch them any time:
   - 🎯 **Dart rifle:** one accurate dart (the default).
   - ⚡ **Rapid darts:** fast stream of small darts, each weaker.
   - ✴️ **Spread gun:** a double barrel firing 6 pellets in a cone. Strong up close, slow to reload.
+  - 🔥 **Machine gun:** spinning barrels, a very fast stream of light darts. Hold to fire.
   - 💥 **Sleepy cannon:** a slow, heavy shell that explodes (fireball, smoke, shake) and hits every dinosaur within about 5 m.
 - **Weather (v3.3)** — each mission starts sunny, rainy, foggy or stormy and usually changes once on the way, with a ranger-radio warning. Rain brings streaks, a rain sound and wet ground. Fog cuts visibility to about 50 m. Thunderstorms add lightning flashes and thunder. Grown-ups can fix the weather in the menu (*Weather*).
 - Every dinosaur moves at its own speed: raptors sprint (up to ~9 m/s), Triceratops trot or charge, Stegosaurus plod, Pteranodons dive along the road.
