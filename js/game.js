@@ -9,7 +9,7 @@ import { FX } from './fx.js';
 import { Convoy } from './convoy.js';
 import { audioBind, audioInit, sfx, cry, say, musicStart, musicStop, audioTick, ambOff, AC, setRain } from './audio.js';
 
-export const VERSION = '3.11.0';
+export const VERSION = '3.12.1';
 
 /* ================= settings (this device only) ================= */
 const SKEY = 'dinoRanger.v1';
@@ -31,17 +31,17 @@ const BLOOD = () => S.blood !== false;
 /* ================= missions ================= */
 const LEVELS = [
   { name: 'Fern Valley', emoji: '🌿', say: 'Ranger, this is Fern Valley. Dinosaurs ahead! Tap to fire the darts!',
-    boss: 'bigTrike', bossSize: 1.9, bossHp: [8, 12], bossRoll: 0, bossSay: 'Whoa! A giant Triceratops! Keep firing!', kinds: { raptor: 3, trike: 1.2 }, root: 45, herd: true },
+    boss: 'bigTrike', bossSize: 1.9, bossHp: [25, 40], bossRoll: 0, bossSay: 'Whoa! A giant Triceratops! Keep firing!', kinds: { raptor: 3, trike: 1.2 }, root: 45, herd: true },
   { name: 'River Gorge', emoji: '🏞️', say: 'River Gorge! Watch the sky for Pteranodons!',
-    boss: 'spino', bossSize: 1, bossHp: [10, 14], bossRoll: 0, bossSay: 'A huge Spinosaurus by the river! Fire, fire, fire!', kinds: { raptor: 2, ptera: 2, stego: 1.2 }, root: 43 },
+    boss: 'spino', bossSize: 1, bossHp: [30, 45], bossRoll: 0, bossSay: 'A huge Spinosaurus by the river! Fire, fire, fire!', kinds: { raptor: 2, ptera: 2, stego: 1.2 }, root: 43 },
   { name: 'Volcano Ridge', emoji: '🌋', say: 'Volcano Ridge. Last mission, ranger! Stay sharp!',
-    boss: 'rex', bossSize: 1, bossHp: [12, 16], bossRoll: 1.8, bossSay: "It's the T. rex! Fire the darts!", kinds: { raptor: 3, ptera: 1, stego: 1, trike: 1 }, root: 40 },
+    boss: 'rex', bossSize: 1, bossHp: [35, 55], bossRoll: 1.8, bossSay: "It's the T. rex! Fire the darts!", kinds: { raptor: 3, ptera: 1, stego: 1, trike: 1 }, root: 40 },
   { name: 'Misty Marsh', emoji: '🐸', say: 'Misty Marsh, ranger. Stay on the causeway, and watch the water!',
-    boss: 'bigStego', bossSize: 1.7, bossHp: [10, 14], bossRoll: 0, bossSay: 'A giant Stegosaurus! Look at those spikes! Fire!', kinds: { raptor: 2, stego: 1.5, ptera: 1.5 }, root: 42 },
+    boss: 'bigStego', bossSize: 1.7, bossHp: [30, 45], bossRoll: 0, bossSay: 'A giant Stegosaurus! Look at those spikes! Fire!', kinds: { raptor: 2, stego: 1.5, ptera: 1.5 }, root: 42 },
   { name: 'Red Canyon', emoji: '🏜️', say: 'Red Canyon. Raptors love the rocks here. Eyes open!',
-    boss: 'alphaRaptor', bossSize: 2.6, bossHp: [10, 14], bossRoll: 0, bossSay: "That's the Alpha Raptor! It's fast. Keep firing!", kinds: { raptor: 4, trike: 1, ptera: 0.7 }, root: 44 },
+    boss: 'alphaRaptor', bossSize: 2.6, bossHp: [30, 45], bossRoll: 0, bossSay: "That's the Alpha Raptor! It's fast. Keep firing!", kinds: { raptor: 4, trike: 1, ptera: 0.7 }, root: 44 },
   { name: 'Sunset Plains', emoji: '🌅', say: 'Sunset Plains. Giant herds all around. Final mission, ranger!',
-    boss: 'kingRex', bossSize: 1.3, bossHp: [14, 18], bossRoll: 1.8, bossSay: "It's the King Rex! The biggest one of all!", kinds: { raptor: 2, trike: 1.5, stego: 1, ptera: 1 }, root: 41, herd: true },
+    boss: 'kingRex', bossSize: 1.3, bossHp: [40, 60], bossRoll: 1.8, bossSay: "It's the King Rex! The biggest one of all!", kinds: { raptor: 2, trike: 1.5, stego: 1, ptera: 1 }, root: 41, herd: true },
 ];
 const SET = 3;   // each course has 3 levels; a ride plays from the chosen level to the end of its course
 const COURSES = [{ name: 'Jungle Trail', emoji: '🌴', first: 0 }, { name: 'Wild Lands', emoji: '🗺️', first: 3 }];
@@ -175,6 +175,7 @@ const WEAPONS = {
   spread: { kick: 0.065, buzz: 30, icon: '✴️', name: 'Spread gun', cd: 0.8, dmg: 0.6, pellets: 6, spread: 34, sfx: 'spread', small: true },
   cannon: { kick: 0.11, buzz: 60, icon: '💥', name: 'Sleepy cannon', cd: 1.4, dmg: 3, pellets: 1, spread: 0, sfx: 'launch', splash: 5, speed: 55 },
 };
+const BOSS_ARMOR = 0.4;   // bosses shrug off most of each hit: they take endurance to bring down
 const curW = () => WEAPONS[G.weapon] || WEAPONS.rifle;
 function setWeapon(k) { G.weapon = k; cockpit.setWeapon(k); G.cool = 0; document.querySelectorAll('#weapons button').forEach(b => b.classList.toggle('sel', b.dataset.w === k)); }
 let shellGeo = null;
@@ -217,7 +218,7 @@ function dartArrive(dt) {
   const d = hit.d; if (!d || d.mode === 'dead' || !d.root.parent) { sfx.miss(); return; }
   const wp = hit.obj.localToWorld(hit.local.clone()), dir = tmp2.copy(dt.to).sub(dt.from).normalize();
   stickDart(d, hit.obj, hit.local, dir);
-  damage(d, w.dmg * (hit.head ? 2 : 1), wp, dir, hit.head, w.small ? 0.6 : 1);
+  damage(d, w.dmg * (hit.head ? (d.boss ? 1.5 : 2) : 1) * (d.boss ? BOSS_ARMOR : 1), wp, dir, hit.head, w.small ? 0.6 : 1);
 }
 function buzz(ms) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} }   // phones only; iPad Safari has no web vibration
 function mark(wp, big) { const p = toScreen(wp); if (p.ok) G.marks.push({ x: p.x, y: p.y, t: 0, big }); }
@@ -232,7 +233,8 @@ function damage(d, dmg, wp, dir, head, fxK = 1) {
   else fx.puff(wp, 0.3);
   d.hitT = 0.35; d.stun = 0.7; d.flinchDir = Math.random() < 0.5 ? -1 : 1;
   if (head) pop(wp, '★★');
-  if (d.boss) { const before = Math.floor(d.fed); d.fed += dmg; const n = Math.floor(d.fed) - before; if (n > 0) star(wp, Math.min(n, 4)); if (d.fed >= d.hp) bossDone(); else cry(d.sp.cry, 0.4); return; }
+  if (d.boss) { const before = Math.floor(d.fed); d.fed += dmg; d.jolt *= 0.4;
+    if (!d.enraged && d.fed >= d.hp / 2 && d.fed < d.hp) { d.enraged = true; setSub(d, 'roar'); G.shake = Math.max(G.shake, 0.5); say("It's getting angry! Keep firing, ranger!", true); } const n = Math.floor(d.fed) - before; if (n > 0) star(wp, Math.min(n, 4)); if (d.fed >= d.hp) bossDone(); else cry(d.sp.cry, 0.4); return; }
   d.hp -= dmg;
   if (d.hp <= 0) { killDino(d, wp, head); G.hitStop = 0.07; mark(wp, true); buzz(40); } else { cry(d.sp.cry, 0.6); if (head) G.hitStop = 0.04; }
 }
@@ -247,7 +249,8 @@ function explode(dt, hit) {
     const direct = hit.d === d;
     if (!direct && dist > w.splash) continue;
     const dmg = direct ? w.dmg * (hit.head ? 1.5 : 1) : Math.max(1, w.dmg * (1 - Math.max(0, dist) / w.splash));
-    damage(d, dmg, direct ? at : c, dir, direct && hit.head, 1.3);
+    const dmgB = d.boss ? dmg * BOSS_ARMOR : dmg;
+    damage(d, dmgB, direct ? at : c, dir, direct && hit.head, 1.3);
   }
 }
 function killDino(d, wp, head) {
@@ -262,7 +265,7 @@ function turnTo(d, tx, tz, rate, dt) { rate /= Math.sqrt(Math.max(1, d.mass || 1
 function stepFwd(d, sp, dt) { d.speed += (sp - d.speed) * Math.min(1, dt * 5 / (d.mass || 1)); d.pos.x += Math.sin(d.heading) * d.speed * dt; d.pos.z += Math.cos(d.heading) * d.speed * dt; }
 function biteHit(d, big) {
   if (!ACT()) return;
-  hurt(big ? (S.diff === 'easy' ? 14 : 22) : (S.diff === 'easy' ? 9 : 15));
+  hurt(d.boss ? (S.diff === 'easy' ? 7 : 10) : big ? (S.diff === 'easy' ? 10 : 15) : (S.diff === 'easy' ? 9 : 15));
   const side = Math.sign(jeepR.dot(tmp.copy(d.pos).sub(jeepPos))) || 1;
   G.shake = Math.max(G.shake, big ? 0.75 : 0.5); G.flash = 0.35; G.red = BLOOD() ? 0.35 : 0;
   G.bumpV.addScaledVector(jeepR, -side * (big ? 0.9 : 0.6)).addScaledVector(UP, big ? 0.6 : 0.35);
@@ -356,8 +359,8 @@ function updBoss(b, dt) {
     switch (b.sub) {
       case 'in': b.fwd -= 7 * dt; b.setAnim('run'); b.speed = 7; if (b.fwd <= 15) { setSub(b, 'roar'); G.phase = 'boss'; } break;
       case 'roar': b.speed = 0; if (b.subT > 1.9) { setSub(b, 'stalk'); b.setAnim('walk'); } break;
-      case 'stalk': { const want = act ? 11 : 14; b.fwd += (want - b.fwd) * dt * 0.6; b.lat = Math.sin(b.t * 0.55) * 3; b.speed = 2.2; b.setAnim('walk'); if (b.subT > (act ? 3.6 : 5.5)) setSub(b, act ? 'lunge' : 'roar'); break; }
-      case 'lunge': b.fwd -= 9 * dt; b.lat += ((b.lat >= 0 ? 2.6 : -2.6) - b.lat) * dt * 2; b.speed = 8; b.setAnim('run'); if (b.fwd < 6.5 + b.size) { setSub(b, 'bite'); b.setAnim('attack'); } break;
+      case 'stalk': { const want = act ? 11 : 14; b.fwd += (want - b.fwd) * dt * 0.6; b.lat = Math.sin(b.t * 0.55) * 3; b.speed = 2.2; b.setAnim('walk'); if (b.subT > (act ? (b.enraged ? 2.6 : 3.6) : 5.5)) setSub(b, act ? 'lunge' : 'roar'); break; }
+      case 'lunge': b.fwd -= (b.enraged ? 12 : 9) * dt; b.lat += ((b.lat >= 0 ? 2.6 : -2.6) - b.lat) * dt * 2; b.speed = 8; b.setAnim('run'); if (b.fwd < 6.5 + b.size) { setSub(b, 'bite'); b.setAnim('attack'); } break;
       case 'bite': b.speed = 0; if (!b.bit && b.animT > 0.38) { b.bit = true; biteHit(b, true); cry(b.sp.cry, 0.5); } if (b.animT > 0.9) { b.bit = false; setSub(b, 'back'); } break;
       case 'back': b.fwd += 6 * dt; b.speed = 3; b.setAnim('walk'); if (b.fwd >= 13) setSub(b, 'roar'); break;
     }
