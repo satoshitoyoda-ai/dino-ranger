@@ -1,4 +1,4 @@
-# Dino Ranger: Jungle Run — v3.4 (3D)
+# Dino Ranger: Jungle Run — v3.5 (3D)
 
 An original dinosaur ride game in the arcade light-gun style, now in real 3D. Ride an open jeep along a winding, hilly jungle track through three missions. Dinosaurs walk, sprint and charge out of the jungle, and some leap or lunge at the jeep and bite (the screen shakes and the jeep bumps). You **tap to fire darts** from a big first-person rifle. Each mission ends with a giant: Triceratops, Spinosaurus, then T. rex.
 
@@ -21,9 +21,9 @@ An original dinosaur ride game in the arcade light-gun style, now in real 3D. Ri
 - **Aiming is exact.** The dart goes where you tap: the game casts a ray from the tap into the 3D scene and hits the dinosaur's actual body. *Normal* has no aim assist. *Easy* only adds a small helper ring (34 px) around a tap that just misses. v2.1's forgiving 100–150 px assist is gone.
 - **Head shots count double** (and give a bonus star). Small dinosaurs need 1 dart, Triceratops and Stegosaurus 3 (2 on Easy), the giants 8–16.
 - Holding a finger down keeps firing and the gun follows the finger.
-- **Six missions (v3.4)** in two rides of three. Each ride plays three missions; the next ride plays the other three, then it starts over.
-  - Ride A: Fern Valley (giant Triceratops), River Gorge (Spinosaurus), Volcano Ridge (T. rex).
-  - Ride B: Misty Marsh (causeway through swamp, giant Stegosaurus), Red Canyon (red cliffs and badlands, Alpha Raptor), Sunset Plains (golden grassland with big herds, King Rex).
+- **Pick a course and level (v3.5):** ▶ on the title opens *Pick a course*. There are two courses with 3 levels each. Tap any level to start there; the ride continues to the end of that course. Each card shows the boss type and your best stars for that level. One ride counts once toward the daily limit, whichever level you start on.
+  - 🌴 **Jungle Trail:** 1 Fern Valley (giant Triceratops), 2 River Gorge (Spinosaurus), 3 Volcano Ridge (T. rex).
+  - 🗺️ **Wild Lands:** 1 Misty Marsh (swamp causeway, giant Stegosaurus), 2 Red Canyon (red cliffs, Alpha Raptor), 3 Sunset Plains (golden grassland with big herds, King Rex).
 - **Four weapons (v3.3)** — the round buttons bottom-left switch them any time:
   - 🎯 **Dart rifle:** one accurate dart (the default).
   - ⚡ **Rapid darts:** fast stream of small darts, each weaker.

@@ -8,7 +8,7 @@ import { Cockpit, makeDart } from './rifle.js';
 import { FX } from './fx.js';
 import { audioBind, audioInit, sfx, cry, say, musicStart, musicStop, audioTick, ambOff, AC, setRain } from './audio.js';
 
-export const VERSION = '3.4.0';
+export const VERSION = '3.5.0';
 
 /* ================= settings (this device only) ================= */
 const SKEY = 'dinoRanger.v1';
@@ -42,7 +42,8 @@ const LEVELS = [
   { name: 'Sunset Plains', emoji: '🌅', say: 'Sunset Plains. Giant herds all around. Final mission, ranger!',
     boss: 'kingRex', bossSize: 1.3, bossHp: [14, 18], bossRoll: 1.8, bossSay: "It's the King Rex! The biggest one of all!", kinds: { raptor: 2, trike: 1.5, stego: 1, ptera: 1 }, root: 41, herd: true },
 ];
-const SET = 3;   // a ride = 3 missions; rides alternate between missions 1-3 and 4-6
+const SET = 3;   // each course has 3 levels; a ride plays from the chosen level to the end of its course
+const COURSES = [{ name: 'Jungle Trail', emoji: '🌴', first: 0 }, { name: 'Wild Lands', emoji: '🗺️', first: 3 }];
 const GUIDE = ['raptor', 'trike', 'stego', 'ptera', 'spino', 'rex'];
 const RIDE = 6.5;
 audioBind(S, ACT, () => (LEVELS[G ? G.level : 0] || LEVELS[0]).root);
@@ -352,11 +353,32 @@ function toTitle() {
   for (const [k, sOff, lat] of [['raptor', 13, -4.5], ['trike', 19, 6], ['raptor', 15, -6.5], ['stego', 30, -9]]) { const d = mkDino(k); const b = world.posAt(G.s + sOff), R = world.dirAt(G.s + sOff).cross(UP).normalize(); d.pos.copy(b).addScaledVector(R, lat); d.pos.y = groundAt(d.pos); d.heading = Math.atan2(-R.x * Math.sign(lat), -R.z * Math.sign(lat)) + 0.6; d.mode = 'idle'; d.setAnim('idle'); G.dinos.push(d); }
   show('title');
 }
-function setStart() { return (S.set || 0) * SET; }
-function startRide() {
+function courseOf(i) { return Math.floor(i / SET); }
+// course & level picker (title ▶ opens it)
+function openCourses() {
   const lim = +S.ridesPerDay;
   if (lim > 0 && ridesToday() >= lim) { G.state = 'rest'; show('rest'); say("The dinosaurs are sleeping. Let's go on a new mission tomorrow" + nameBit() + '!'); return; }
-  ridesToday(); S.rides++; save(); G.score = 0; startLevel(setStart());
+  G.state = 'courses'; const box = $('clist'); box.innerHTML = '';
+  S.best = S.best || {};
+  COURSES.forEach((c, ci) => {
+    const card = document.createElement('div'); card.className = 'course';
+    const h = document.createElement('div'); h.className = 'chead'; h.textContent = c.emoji + ' ' + c.name; card.appendChild(h);
+    const row = document.createElement('div'); row.className = 'lrow';
+    for (let k = 0; k < SET; k++) {
+      const i = c.first + k, lv = LEVELS[i]; if (!lv) continue;
+      const b = document.createElement('button'); b.className = 'lvl';
+      b.innerHTML = '<span class="ln">' + (k + 1) + '</span><span class="le">' + lv.emoji + '</span><span class="lt">' + lv.name + '</span><span class="lb">' + (['rex', 'spino', 'kingRex', 'alphaRaptor'].includes(lv.boss) ? '🦖' : '🦕') + (S.best[i] ? ' ⭐' + S.best[i] : '') + '</span>';
+      b.addEventListener('click', e => { e.preventDefault(); audioInit(); sfx.ui(); startRide(i); });
+      row.appendChild(b);
+    }
+    card.appendChild(row); box.appendChild(card);
+  });
+  show('courses'); say('Pick a course, ranger!', true);
+}
+function startRide(i) {
+  const lim = +S.ridesPerDay;
+  if (lim > 0 && ridesToday() >= lim) { G.state = 'rest'; show('rest'); say("The dinosaurs are sleeping. Let's go on a new mission tomorrow" + nameBit() + '!'); return; }
+  ridesToday(); S.rides++; save(); G.score = 0; G.courseEnd = courseOf(i) * SET + SET - 1; startLevel(i);
 }
 function startLevel(i) {
   const lv = LEVELS[i];
@@ -389,7 +411,8 @@ world.onLightning = () => { G.flash = Math.max(G.flash, 0.6); setTimeout(() => s
 function beginPlay() { G.state = 'play'; G.vT = RIDE; show(null); musicStart(); }
 function levelClear() {
   S.totalStars += G.levelScore; save(); musicStop();
-  if (G.level >= Math.min(LEVELS.length, setStart() + SET) - 1) { S.set = ((S.set || 0) + 1) % Math.ceil(LEVELS.length / SET); save(); G.state = 'end'; $('eStars').textContent = G.score; show('end'); setTimeout(() => say((BLOOD() ? 'Mission complete! You stopped every dinosaur. Great job, ranger' : 'Mission complete! All the dinosaurs are safe and sleeping. Great job, ranger') + nameBit() + '!'), 400); return; }
+  S.best = S.best || {}; S.best[G.level] = Math.max(S.best[G.level] || 0, G.levelScore); save();
+  if (G.level >= Math.min(LEVELS.length - 1, G.courseEnd ?? 2)) { G.state = 'end'; $('eStars').textContent = G.score; show('end'); setTimeout(() => say((BLOOD() ? 'Mission complete! You stopped every dinosaur. Great job, ranger' : 'Mission complete! All the dinosaurs are safe and sleeping. Great job, ranger') + nameBit() + '!'), 400); return; }
   G.state = 'clear'; $('cStars').textContent = G.levelScore; dots($('cDots'), G.level + 1, G.level); show('clear');
 }
 function pauseGame() { if (G.state !== 'play') return; G.state = 'paused'; G.pointers.clear(); musicStop(); show('pause'); }
@@ -413,13 +436,13 @@ function placeJeep(dt) {
 let engT = 0;
 function update(dt) {
   G.t += dt;
-  const live = ['title', 'intro', 'play', 'clear', 'end', 'rest', 'over'].includes(G.state);
-  if (AC && (engT -= dt) <= 0) { engT = 0.1; audioTick(S.sound && live && !['title', 'end', 'rest'].includes(G.state), G.v / RIDE, S.sound && live); }
+  const live = ['title', 'intro', 'play', 'clear', 'end', 'rest', 'over', 'courses'].includes(G.state);
+  if (AC && (engT -= dt) <= 0) { engT = 0.1; audioTick(S.sound && live && !['title', 'end', 'rest', 'courses'].includes(G.state), G.v / RIDE, S.sound && live); }
   if (!live && G.state !== 'guide' && G.state !== 'parent') return;
   if (!live) { world.update(dt, camera); return; }
   if ((G.birdT -= dt) <= 0) { G.birdT = rnd(2, 5); if (G.level !== 2) sfx.bird(); }
   G.v += (G.vT - G.v) * Math.min(1, dt * 1.4); G.s += G.v * dt;
-  if (G.state === 'title' && G.s > 30) G.s = 4;
+  if ((G.state === 'title' || G.state === 'courses') && G.s > 30) G.s = 4;
   placeJeep(dt);
   if (G.state === 'intro') { G.introT -= dt; if (G.introT <= 0) beginPlay(); }
   if (G.state === 'play') {
@@ -525,7 +548,7 @@ document.addEventListener('pointerdown', audioInit, true);
 ['gesturestart', 'gesturechange', 'contextmenu', 'dblclick', 'selectstart'].forEach(ev => document.addEventListener(ev, e => e.preventDefault()));
 document.addEventListener('touchmove', e => { if (!e.target.closest('#guide, #parent .card')) e.preventDefault(); }, { passive: false });
 function tapBtn(id, fn) { $(id).addEventListener('click', e => { e.preventDefault(); audioInit(); sfx.ui(); fn(); }); }
-tapBtn('bPlay', startRide); tapBtn('bPause', pauseGame); tapBtn('bResume', resumeGame);
+tapBtn('bPlay', openCourses); tapBtn('cBack', () => { G.state = 'title'; show('title'); }); tapBtn('bPause', pauseGame); tapBtn('bResume', resumeGame);
 tapBtn('bNext', () => startLevel(G.level + 1));
 tapBtn('bRetry', () => { G.score -= G.levelScore; startLevel(G.level); });
 tapBtn('bHome4', toTitle);
