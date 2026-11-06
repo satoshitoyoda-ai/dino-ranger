@@ -9,7 +9,7 @@ import { FX } from './fx.js';
 import { Convoy } from './convoy.js';
 import { audioBind, audioInit, sfx, cry, say, musicStart, musicStop, audioTick, ambOff, AC, setRain } from './audio.js';
 
-export const VERSION = '3.8.0';
+export const VERSION = '3.11.0';
 
 /* ================= settings (this device only) ================= */
 const SKEY = 'dinoRanger.v1';
@@ -75,7 +75,7 @@ function resize() {
 
 /* ================= state ================= */
 const G = { state: 'boot', level: 0, s: 0, v: 0, vT: 0, t: 0, dinos: [], bg: [], boss: null, darts: [], stuck: [], spawnT: 1, score: 0, levelScore: 0,
-  phase: 'ride', shake: 0, flash: 0, red: 0, introT: 0, doneT: 0, pointers: new Map(), hudBump: 0, aim: { x: 0, y: 0 }, birdT: 2, stars: [], pops: [],
+  phase: 'ride', shake: 0, flash: 0, red: 0, introT: 0, doneT: 0, pointers: new Map(), hudBump: 0, aim: { x: 0, y: 0 }, birdT: 2, stars: [], pops: [], marks: [], camKick: 0, camKickV: 0, hitStop: 0,
   bump: new THREE.Vector3(), bumpV: new THREE.Vector3(), fps: 60, fpsT: 0, fpsN: 0 };
 const jeepPos = new THREE.Vector3(), jeepF = new THREE.Vector3(), jeepR = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
 const tmp = new THREE.Vector3(), tmp2 = new THREE.Vector3();
@@ -93,11 +93,27 @@ function optimise(d) { // merge static meshes that share a joint + material -> f
       const m0 = list[0], nm = new THREE.Mesh(merged, m0.material); nm.castShadow = m0.castShadow; nm.receiveShadow = true; nm.userData = Object.assign({}, m0.userData);
       for (const m of list) { g.remove(m); m.geometry.dispose(); } g.add(nm); }
   }
-  d.hitMeshes = []; d.root.traverse(o => { if (o.isMesh) { o.userData.dino = d; if (!o.userData.part) o.userData.part = 'body'; d.hitMeshes.push(o); } });
+  d.hitMeshes = []; d.root.traverse(o => { if (o.isMesh && o !== d.blob) { o.userData.dino = d; if (!o.userData.part) o.userData.part = 'body'; d.hitMeshes.push(o); } });
 }
-function mkDino(kind, size = 1, variant = 0) { const d = new Dino(kind, { size, variant }); if (!d.gl) optimise(d); scene.add(d.root); return d; }
+function mkDino(kind, size = 1, variant = 0) { const d = new Dino(kind, { size, variant }); if (!d.gl) optimise(d); scene.add(d.root); d.onStep = footfall; return d; }
+function footfall(d, side) {
+  const big = d.mass >= 1.6; if (!big || !d.root.parent) return;
+  const dist = Math.max(2, d.pos.distanceTo(camera.position)), w = d.mass;
+  if (dist < 45) sfx.step(clamp(w * 0.9 / dist, 0.02, 0.45));
+  if (dist < 30) G.shake = Math.max(G.shake, clamp(w * 0.35 / dist, 0, 0.28));
+  if (dist < 35) { const fx0 = Math.sin(d.heading), fz0 = Math.cos(d.heading), L = d.dims.len * d.size * 0.15, W = d.dims.halfW * d.size;
+    fx.dust(tmp2.set(d.pos.x + fx0 * L * side + fz0 * W * side, d.pos.y + 0.1, d.pos.z + fz0 * L * side - fx0 * W * side), 3, clamp(w * 0.18, 0.3, 1.1)); }
+}
 function removeDino(d) { scene.remove(d.root); d.dispose(); }
-function groundAt(p) { return world.height(p.x, p.z); }
+function groundAt(p) { return world.ground(p.x, p.z); }
+// stand a dinosaur on the visible ground: lowest of hip/front/back samples, and pitch it along the slope
+function settle(d) {
+  if (d.sp.type === 'flyer') return;
+  const L = Math.max(1, d.dims.len * d.size * 0.4), fx = Math.sin(d.heading), fz = Math.cos(d.heading);
+  const hc = world.ground(d.pos.x, d.pos.z), hf = world.ground(d.pos.x + fx * L, d.pos.z + fz * L), hb = world.ground(d.pos.x - fx * L, d.pos.z - fz * L);
+  d.pos.y = Math.min(hc, (hf + hb) / 2 + 0.02);
+  d.root.rotation.order = 'YXZ'; d.root.rotation.x = d.mode === 'dead' ? 0 : clamp((hb - hf) / (2 * L), -0.35, 0.35);
+}
 function speciesHp(kind) { const sp = SPECIES[kind]; let hp = sp.hp; if (S.diff === 'easy') hp = Math.min(hp, 2); return hp; }
 
 function spawnDino() {
@@ -106,22 +122,26 @@ function spawnDino() {
   let side = Math.random() < 0.5 ? -1 : 1; if (world.env.river && sp.type !== 'flyer') side = 1;
   const swamp = world.env.swamp && sp.type !== 'flyer';
   const roleR = Math.random(), role = swamp ? 'charge' : sp.type === 'flyer' ? 'swoop' : (kind === 'stego' ? (roleR < 0.25 ? 'charge' : 'cross') : kind === 'raptor' ? (roleR < 0.6 ? 'charge' : 'cross') : (roleR < 0.5 ? 'charge' : 'cross'));
-  const ahead = rnd(36, 52);
+  // ambush: burst out of the trees right beside the road, close in front (Action mode, ground dinosaurs)
+  const ambush = ACT() && sp.type !== 'flyer' && !swamp && Math.random() < 0.4;
+  const ahead = ambush ? rnd(12, 20) : rnd(26, 40);
   for (let i = 0; i < pairs; i++) {
     const d = mkDino(kind, kind === 'raptor' ? rnd(1.3, 1.6) : rnd(0.9, 1.15), Math.random() < 0.5 ? 0 : 1);
     const s = G.s + ahead + i * 3, base = world.posAt(s), F = world.dirAt(s), R = tmp.crossVectors(F, UP).normalize();
-    const lat = swamp ? rnd(-2, 2) + i * 2.5 : side * (sp.type === 'flyer' ? rnd(-10, 10) : rnd(9, 24)) + i * side * 2;
+    const lat = swamp ? rnd(-2, 2) + i * 2.5 : side * (sp.type === 'flyer' ? rnd(-10, 10) : ambush ? rnd(8, 10.5) : rnd(7, 18)) + i * side * 2;
     d.pos.copy(base).addScaledVector(R, lat); d.pos.y = groundAt(d.pos);
     // every individual moves at its own pace: sprinters and plodders
     d.vmax = rnd(sp.speed[0], sp.speed[1]) * D().speedMul; d.gait = d.vmax > (sp.type === 'thero' ? 3.4 : 3.0) ? 'run' : 'walk';
     d.mode = role; d.hp = speciesHp(kind); d.hpMax = d.hp; d.side = side; d.t = 0; d.stun = 0; d.cried = false; d.leapRoll = kind === 'raptor' && Math.random() < 0.5;
-    if (role === 'cross') { const tgtS = s - rnd(4, 14), Rb = world.dirAt(tgtS).cross(UP).normalize(); d.goal = world.posAt(tgtS).addScaledVector(Rb, -side * (world.env.river ? 4.5 : rnd(10, 22))); }
-    if (kind === 'raptor' && role === 'charge' && ACT() && !swamp && Math.random() < 0.35) { // this one hunts Ranger Two's jeep
+    if (role === 'cross') { const tgtS = G.s + (ambush ? rnd(9, 14) : rnd(13, 22)), Rb = world.dirAt(tgtS).cross(UP).normalize(); d.goal = world.posAt(tgtS).addScaledVector(Rb, -side * (world.env.river ? 4.5 : ambush ? rnd(8, 12) : rnd(10, 22))); }
+    if (ambush) { d.vmax = Math.max(d.vmax, sp.speed[1] * 0.8 * D().speedMul); d.gait = 'run'; d.cried = true; setTimeout(() => cry(sp.cry, 0.9), 50); }
+    if (kind === 'raptor' && role === 'charge' && ACT() && !swamp && !ambush && Math.random() < 0.25) { // this one hunts Ranger Two's jeep
       d.mode = 'chargeNPC'; d.attackingConvoy = true; const cs = convoy.s + rnd(10, 20), cb = world.posAt(cs), cR = world.dirAt(cs).cross(UP).normalize();
-      d.pos.copy(cb).addScaledVector(cR, side * rnd(8, 15)); d.pos.y = groundAt(d.pos); }
+      d.pos.copy(cb).addScaledVector(cR, side * rnd(7, 11)); d.pos.y = groundAt(d.pos); }
     if (sp.type === 'flyer') { d.alt = rnd(9, 14); d.pos.y += d.alt; d.setAnim('fly'); d.lane = rnd(-3.5, 3.5); }
     else d.setAnim(d.gait);
     d.heading = Math.atan2(jeepPos.x - d.pos.x, jeepPos.z - d.pos.z);
+    if (d.pos.distanceTo(jeepPos) < 11) { removeDino(d); continue; }   // never pop in right next to the jeep
     G.dinos.push(d);
   }
 }
@@ -150,10 +170,10 @@ function pickHit(x, y) {
 function missPoint(x, y) { ndc.set(x / W * 2 - 1, -(y / H) * 2 + 1); ray.setFromCamera(ndc, camera); const o = ray.ray.origin, d = ray.ray.direction; for (let t = 2; t < 140; t += 1.2) { tmp.copy(o).addScaledVector(d, t); if (tmp.y < world.height(tmp.x, tmp.z)) return { p: tmp.clone(), ground: true }; } return { p: o.clone().addScaledVector(d, 140), ground: false }; }
 // weapons: dart rifle, rapid darts, spread (double barrel), sleepy cannon (explodes, hits everything nearby)
 const WEAPONS = {
-  rifle:  { icon: '🎯', name: 'Dart rifle', cd: 0.3, dmg: 1, pellets: 1, spread: 0, sfx: 'dart' },
-  rapid:  { icon: '⚡', name: 'Rapid darts', cd: 0.11, dmg: 0.4, pellets: 1, spread: 7, sfx: 'rapid', small: true },
-  spread: { icon: '✴️', name: 'Spread gun', cd: 0.8, dmg: 0.6, pellets: 6, spread: 34, sfx: 'spread', small: true },
-  cannon: { icon: '💥', name: 'Sleepy cannon', cd: 1.4, dmg: 3, pellets: 1, spread: 0, sfx: 'launch', splash: 5, speed: 55 },
+  rifle:  { kick: 0.035, buzz: 15, icon: '🎯', name: 'Dart rifle', cd: 0.3, dmg: 1, pellets: 1, spread: 0, sfx: 'dart' },
+  rapid:  { kick: 0.012, buzz: 6, icon: '⚡', name: 'Rapid darts', cd: 0.11, dmg: 0.4, pellets: 1, spread: 7, sfx: 'rapid', small: true },
+  spread: { kick: 0.065, buzz: 30, icon: '✴️', name: 'Spread gun', cd: 0.8, dmg: 0.6, pellets: 6, spread: 34, sfx: 'spread', small: true },
+  cannon: { kick: 0.11, buzz: 60, icon: '💥', name: 'Sleepy cannon', cd: 1.4, dmg: 3, pellets: 1, spread: 0, sfx: 'launch', splash: 5, speed: 55 },
 };
 const curW = () => WEAPONS[G.weapon] || WEAPONS.rifle;
 function setWeapon(k) { G.weapon = k; cockpit.setWeapon(k); G.cool = 0; document.querySelectorAll('#weapons button').forEach(b => b.classList.toggle('sel', b.dataset.w === k)); }
@@ -176,6 +196,7 @@ function fire(x, y) {
     aimDart(m, from, to);
   }
   sfx[w.sfx](); cockpit.fire(); if (w.splash) G.shake = Math.max(G.shake, 0.12);
+  G.camKick = Math.min(0.2, (G.camKick || 0) + w.kick); G.camKickV = (Math.random() - 0.5) * w.kick; buzz(w.buzz);
 }
 const NEGZ = new THREE.Vector3(0, 0, -1);
 function aimDart(m, a, b) { m.quaternion.setFromUnitVectors(NEGZ, tmp2.copy(b).sub(a).normalize()); }
@@ -198,15 +219,22 @@ function dartArrive(dt) {
   stickDart(d, hit.obj, hit.local, dir);
   damage(d, w.dmg * (hit.head ? 2 : 1), wp, dir, hit.head, w.small ? 0.6 : 1);
 }
+function buzz(ms) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} }   // phones only; iPad Safari has no web vibration
+function mark(wp, big) { const p = toScreen(wp); if (p.ok) G.marks.push({ x: p.x, y: p.y, t: 0, big }); }
 function damage(d, dmg, wp, dir, head, fxK = 1) {
   sfx.thunk(head);
+  // knock back along the shot and jolt the body
+  const kb = clamp(dmg * 1.6 / Math.max(0.6, d.mass || 1), 0.15, 4);
+  d.kb = (d.kb || new THREE.Vector3()).addScaledVector(tmp.set(dir.x, 0, dir.z).normalize(), kb);
+  d.jolt = Math.min(1, (d.jolt || 0) + 0.45 + dmg * 0.2); d.flinchDir = Math.sign(jeepR.dot(dir)) || 1;
+  mark(wp, head);
   if (BLOOD()) fx.blood(wp, dir, (d.boss ? 1.6 : 1) * (head ? 1.3 : 1) * Math.max(0.8, d.size) * fxK, Math.round((head ? 30 : 20) * fxK));
   else fx.puff(wp, 0.3);
   d.hitT = 0.35; d.stun = 0.7; d.flinchDir = Math.random() < 0.5 ? -1 : 1;
   if (head) pop(wp, '★★');
   if (d.boss) { const before = Math.floor(d.fed); d.fed += dmg; const n = Math.floor(d.fed) - before; if (n > 0) star(wp, Math.min(n, 4)); if (d.fed >= d.hp) bossDone(); else cry(d.sp.cry, 0.4); return; }
   d.hp -= dmg;
-  if (d.hp <= 0) killDino(d, wp, head); else cry(d.sp.cry, 0.6);
+  if (d.hp <= 0) { killDino(d, wp, head); G.hitStop = 0.07; mark(wp, true); buzz(40); } else { cry(d.sp.cry, 0.6); if (head) G.hitStop = 0.04; }
 }
 function explode(dt, hit) {
   const at = hit.miss ? dt.to.clone() : hit.obj.localToWorld(hit.local.clone()), w = dt.w;
@@ -230,8 +258,8 @@ function killDino(d, wp, head) {
 function meet(kind) { const k = SPECIES[kind].base || kind; S.seen[k] = (S.seen[k] || 0) + 1; save(); }
 
 /* ================= AI ================= */
-function turnTo(d, tx, tz, rate, dt) { const want = Math.atan2(tx - d.pos.x, tz - d.pos.z); let df = want - d.heading; while (df > Math.PI) df -= Math.PI * 2; while (df < -Math.PI) df += Math.PI * 2; d.heading += clamp(df, -rate * dt, rate * dt); return Math.abs(df); }
-function stepFwd(d, sp, dt) { d.speed = sp; d.pos.x += Math.sin(d.heading) * sp * dt; d.pos.z += Math.cos(d.heading) * sp * dt; }
+function turnTo(d, tx, tz, rate, dt) { rate /= Math.sqrt(Math.max(1, d.mass || 1)); const want = Math.atan2(tx - d.pos.x, tz - d.pos.z); let df = want - d.heading; while (df > Math.PI) df -= Math.PI * 2; while (df < -Math.PI) df += Math.PI * 2; d.heading += clamp(df, -rate * dt, rate * dt); return Math.abs(df); }
+function stepFwd(d, sp, dt) { d.speed += (sp - d.speed) * Math.min(1, dt * 5 / (d.mass || 1)); d.pos.x += Math.sin(d.heading) * d.speed * dt; d.pos.z += Math.cos(d.heading) * d.speed * dt; }
 function biteHit(d, big) {
   if (!ACT()) return;
   hurt(big ? (S.diff === 'easy' ? 14 : 22) : (S.diff === 'easy' ? 9 : 15));
@@ -294,8 +322,8 @@ function updDino(d, dt) {
   if (d.anim === 'leap' && d.animT > 0.6) d.setAnim(d.gait);
   if (d.mode !== 'dead') { if (ahead < -14 || dist > 90) d.mode = 'gone'; }
   // footsteps for the heavy ones
-  if (d.mode !== 'dead' && sp.type === 'quad' && dist < 22) { const stp = Math.floor(d.ph / Math.PI); if (stp !== d.lastStep) { d.lastStep = stp; sfx.step(clamp(0.9 / dist * d.size * 2, 0.02, 0.3)); } }
-  d.pos.y = groundAt(d.pos);
+  if (d.kb && d.kb.lengthSq() > 1e-4) { d.pos.addScaledVector(d.kb, dt); d.kb.multiplyScalar(Math.max(0, 1 - dt * 7)); }
+  settle(d);
 }
 function updFlyer(d, dt, dist, ahead) {
   const act = ACT();
@@ -305,7 +333,7 @@ function updFlyer(d, dt, dist, ahead) {
     // dive along the road toward the jeep, then pass close overhead
     const tx = jeepPos.x + jeepR.x * d.lane, tz = jeepPos.z + jeepR.z * d.lane;
     turnTo(d, tx, tz, 1.4, dt); stepFwd(d, d.vmax * (d.stun > 0 ? 0.5 : 1), dt);
-    const targetAlt = dist > 28 ? d.alt : (act ? lerp(3.2, d.alt, clamp((dist - 4) / 24, 0, 1)) : 7);
+    const targetAlt = dist > 28 ? d.alt : (act ? lerp(2.4, d.alt, clamp((dist - 4) / 24, 0, 1)) : 7);
     d.pos.y += ((gy + targetAlt) - d.pos.y) * Math.min(1, dt * 1.5);
     d.bank = clamp((d.lastH != null ? (d.heading - d.lastH) / dt : 0) * -0.4, -0.6, 0.6); d.lastH = d.heading;
     d.setAnim(dist < 20 && dist > 6 ? 'glide' : 'fly');
@@ -333,14 +361,14 @@ function updBoss(b, dt) {
       case 'bite': b.speed = 0; if (!b.bit && b.animT > 0.38) { b.bit = true; biteHit(b, true); cry(b.sp.cry, 0.5); } if (b.animT > 0.9) { b.bit = false; setSub(b, 'back'); } break;
       case 'back': b.fwd += 6 * dt; b.speed = 3; b.setAnim('walk'); if (b.fwd >= 13) setSub(b, 'roar'); break;
     }
-    if (b.sub !== 'roar' && b.sub !== 'bite') { const stp = Math.floor(b.ph / Math.PI); if (stp !== b.lastStep) { b.lastStep = stp; sfx.step(clamp(2.6 / b.fwd, 0.08, 0.5)); if (b.fwd < 12) G.shake = Math.max(G.shake, 0.06); } }
   } else if (b.mode === 'dead') {
     b.deadT += dt;
     if (!b.thud && b.animT > 0.5) { b.thud = true; G.shake = 0.7; G.flash = 0.25; sfx.fall(true); fx.dust(b.pos.clone().setY(b.pos.y + 0.3), 26, 2.2); if (BLOOD()) fx.pool(b.pos.clone(), 3.2); }
     if (!BLOOD() && b.deadT > 1.3 && (b.zT = (b.zT || 0) - dt) <= 0) { b.zT = 1.1; fx.zzz(b.bodyWorld(tmp2).add(tmp.set(0, 1.4, 0)), 1.6); }
     b.fwd -= G.v * dt;
   }
-  b.pos.copy(jeepPos).addScaledVector(jeepF, b.fwd).addScaledVector(jeepR, b.lat); b.pos.y = groundAt(b.pos);
+  if (b.kb && b.kb.lengthSq() > 1e-4) { b.fwd += b.kb.dot(jeepF) * dt * 0.5; b.kb.multiplyScalar(Math.max(0, 1 - dt * 7)); }
+  b.pos.copy(jeepPos).addScaledVector(jeepF, b.fwd).addScaledVector(jeepR, b.lat); settle(b);
   if (b.mode !== 'dead') b.heading = Math.atan2(jeepPos.x - b.pos.x, jeepPos.z - b.pos.z) + (b.sub === 'stalk' ? Math.cos(b.t * 0.55) * 0.55 : b.sub === 'roar' ? 0.6 * (b.lat >= 0 ? 1 : -1) : 0);
 }
 function bossDone() {
@@ -452,6 +480,7 @@ function placeJeep(dt) {
   const look = world.posAt(G.s + 12, tmp2); look.y += 1.25; look.addScaledVector(jeepR, Math.sin(t * 0.37) * 0.25);
   camera.lookAt(look);
   camera.rotateZ(clamp(-world.curvature(G.s + 6) * 9, -0.07, 0.07) + Math.sin(t * 1.9) * 0.006 * k + G.bump.x * 0.05);
+  if (G.camKick > 0.0005) { camera.rotateX(G.camKick); camera.rotateY(G.camKickV || 0); camera.position.y += G.camKick * 0.15; G.camKick *= Math.max(0, 1 - dt * 11); G.camKickV *= Math.max(0, 1 - dt * 11); }
   if (G.shake > 0) { const s = G.shake * G.shake; camera.position.x += rnd(-1, 1) * s * 0.18; camera.position.y += rnd(-1, 1) * s * 0.14; camera.rotateX(rnd(-1, 1) * s * 0.05); camera.rotateZ(rnd(-1, 1) * s * 0.05); }
 }
 
@@ -483,9 +512,9 @@ function update(dt) {
     for (const p of G.pointers.values()) { p.hold += dt; if (p.hold >= 0.12 && G.cool <= 0) fire(p.x, p.y); }
     if (G.phase === 'done') { G.doneT += dt; if (G.doneT > 4.5) levelClear(); }
   }
-  for (const d of G.dinos) { if (d.mode !== 'idle') updDino(d, dt); else d.pos.y = groundAt(d.pos); d.update(dt); }
+  for (const d of G.dinos) { if (d.mode !== 'idle') updDino(d, dt); else settle(d); d.update(dt); }
   G.dinos = G.dinos.filter(d => { if (d.mode === 'gone') { removeDino(d); return false; } return true; });
-  for (const d of G.bg) { d.pos.x += Math.sin(d.heading) * d.speed * dt; d.pos.z += Math.cos(d.heading) * d.speed * dt; d.pos.y = groundAt(d.pos); d.update(dt); }
+  for (const d of G.bg) { d.pos.x += Math.sin(d.heading) * d.speed * dt; d.pos.z += Math.cos(d.heading) * d.speed * dt; settle(d); d.update(dt); }
   if (G.boss) { G.boss.t += 0; updBoss(G.boss, dt); G.boss.update(dt); }
   // darts in flight
   for (const dt2 of G.darts) { dt2.t += dt; const u = clamp(dt2.t / dt2.dur, 0, 1); if (dt2.hit.d && dt2.hit.obj) dt2.to = dt2.hit.obj.localToWorld(dt2.hit.local.clone()); dt2.m.position.lerpVectors(dt2.from, dt2.to, u); aimDart(dt2.m, dt2.from, dt2.to); if (u >= 1) { dt2.done = true; scene.remove(dt2.m); dartArrive(dt2); } }
@@ -496,7 +525,7 @@ function update(dt) {
   cockpit.aimAt(dc, dt); cockpit.update(dt);
   fx.update(dt); world.update(dt, camera); if (AC) setRain(live && G.state !== 'title' ? world.wx.rain : 0);
   for (const s of G.stars) { s.t += dt; if (s.t >= s.dur && !s.done) { s.done = true; G.score++; G.levelScore++; G.hudBump = 1; sfx.ding(); } }
-  G.stars = G.stars.filter(s => !s.done); for (const p of G.pops) p.t += dt; G.pops = G.pops.filter(p => p.t < 0.9);
+  G.stars = G.stars.filter(s => !s.done); for (const m of G.marks) m.t += dt; G.marks = G.marks.filter(m => m.t < 0.22); for (const p of G.pops) p.t += dt; G.pops = G.pops.filter(p => p.t < 0.9);
   G.shake = Math.max(0, G.shake - dt); G.flash = Math.max(0, G.flash - dt * 2); G.red = Math.max(0, G.red - dt * 1.5); G.hudBump = Math.max(0, G.hudBump - dt * 3); G.hurtT = Math.max(0, (G.hurtT || 0) - dt * 2);
 }
 
@@ -513,6 +542,8 @@ function drawHUD() {
     hx.strokeStyle = 'rgba(120,230,120,0.95)'; hx.lineWidth = 3; hx.beginPath(); for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { hx.moveTo(p.x + dx * 18, p.y + dy * 18); hx.lineTo(p.x + dx * 40, p.y + dy * 40); } hx.stroke();
     hx.fillStyle = 'rgba(255,80,60,0.95)'; hx.beginPath(); hx.arc(p.x, p.y, 3.5, 0, 7); hx.fill();
   }
+  for (const m of G.marks) { const a = 1 - m.t / 0.22, r = (m.big ? 16 : 10) + m.t * 40; hx.globalAlpha = Math.max(0, a); hx.lineWidth = m.big ? 5 : 3.5; hx.strokeStyle = m.big ? '#ff4030' : '#ffffff'; hx.beginPath();
+    for (const [sx, sy] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) { hx.moveTo(m.x + sx * r * 0.45, m.y + sy * r * 0.45); hx.lineTo(m.x + sx * r, m.y + sy * r); } hx.stroke(); hx.globalAlpha = 1; }
   for (const p of G.pops) { const a = clamp(1 - p.t / 0.9, 0, 1); hx.globalAlpha = a; hx.font = '900 34px system-ui, sans-serif'; hx.textAlign = 'center'; hx.lineWidth = 6; hx.strokeStyle = '#2E2A1E'; hx.strokeText(p.text, p.x, p.y - p.t * 50); hx.fillStyle = '#F2C14E'; hx.fillText(p.text, p.x, p.y - p.t * 50); hx.globalAlpha = 1; hx.textAlign = 'start'; }
   for (const s of G.stars) { const u = clamp(s.t / s.dur, 0, 1), e = u * u * (3 - 2 * u), tx = 60, ty = 52, cx = (s.sx + tx) / 2, cy = Math.min(s.sy, ty) - 120;
     starShape((1 - e) * (1 - e) * s.sx + 2 * (1 - e) * e * cx + e * e * tx, (1 - e) * (1 - e) * s.sy + 2 * (1 - e) * e * cy + e * e * ty, 22 - u * 6, '#F2C14E', '#2E2A1E'); }
@@ -551,6 +582,7 @@ function loop(now) {
   try { frame(dt); } catch (e) { if (!loopErr) { loopErr = e; console.error(e); const w = $('errBox'); w.textContent = 'Error (please screenshot): ' + (e && e.message) + ' @ ' + String(e && e.stack || '').split(String.fromCharCode(10)).slice(0, 2).join(' '); w.style.display = 'block'; } }
 }
 function frame(dt) {
+  if (G.hitStop > 0) { G.hitStop -= dt; dt *= 0.15; }
   if (!G.hold) update(dt);
   if (G.state !== 'guide') renderer.render(scene, camera);
   drawHUD();

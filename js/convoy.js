@@ -91,7 +91,7 @@ export class Convoy {
     this.lat += (wantLat - this.lat) * Math.min(1, dt * 0.8);
     world.posAt(this.s, this.pos); world.dirAt(this.s, this.fwd); this.right.crossVectors(this.fwd, UP).normalize();
     this.pos.addScaledVector(this.right, this.lat);
-    const yF = world.height(this.pos.x + this.fwd.x * 1.6, this.pos.z + this.fwd.z * 1.6), yB = world.height(this.pos.x - this.fwd.x * 1.6, this.pos.z - this.fwd.z * 1.6);
+    const yF = world.ground(this.pos.x + this.fwd.x * 1.6, this.pos.z + this.fwd.z * 1.6), yB = world.ground(this.pos.x - this.fwd.x * 1.6, this.pos.z - this.fwd.z * 1.6);
     this.root.position.set(this.pos.x, (yF + yB) / 2, this.pos.z);
     this.root.rotation.set(0, Math.atan2(-this.fwd.x, -this.fwd.z), 0);
     this.bump = Math.max(0, this.bump - dt * 2.5);

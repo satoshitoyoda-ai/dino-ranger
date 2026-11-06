@@ -130,7 +130,7 @@ export class Cockpit {
   update(dt) {
     this.kick = Math.max(0, this.kick - dt * 7); this.flashT = Math.max(0, this.flashT - dt);
     const k = this.kick * this.kick;
-    const ka = this.kickAmt || 1; this.gunBody.position.set(0, k * 0.012 * ka, k * 0.07 * ka); this.gunBody.rotation.set(k * 0.12 * ka, 0, this.cant);
+    const ka = this.kickAmt || 1, sh = this.kick > 0.6 ? (Math.random() - 0.5) * 0.01 * ka : 0; this.gunBody.position.set(sh, k * 0.02 * ka, k * 0.11 * ka); this.gunBody.rotation.set(k * 0.2 * ka, sh * 2, this.cant + sh * 3);
     this.flash.material.opacity = this.flashT > 0 ? 1 : 0; const s = (0.2 + Math.random() * 0.15) * (this.flashSize || 1); this.flash.scale.set(s, s, 1);
     this.light.intensity = this.flashT > 0 ? 6 : 0;
   }

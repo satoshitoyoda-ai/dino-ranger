@@ -104,6 +104,14 @@ export class World {
     if (E.plains) h = base + far * ((n - 0.45) * 7 + ad * 0.02) + fbm(x * 0.16, z * 0.16, 2) * 0.3 * far;
     return h;
   }
+  // height of the rendered terrain mesh (same triangles), so feet sit exactly on what you see
+  ground(x, z) {
+    const g = this.hgrid; if (!g) return this.height(x, z);
+    const fx = (x - g.xmin) / g.step, fz = (g.z0 - z) / g.step, i = Math.floor(fx), j = Math.floor(fz);
+    if (i < 0 || j < 0 || i >= g.nx - 1 || j >= g.nz - 1) return this.height(x, z);
+    const u = fx - i, v = fz - j, k = j * g.nx + i, a = g.H[k], b = g.H[k + 1], d = g.H[k + g.nx], e = g.H[k + g.nx + 1];
+    return u + v <= 1 ? a + (b - a) * u + (d - a) * v : e + (d - e) * (1 - u) + (b - e) * (1 - v);
+  }
   roadDx(x, z) { return x - this.xr(-z); }
 
   build(i) {
@@ -185,6 +193,7 @@ export class World {
       if (E.volcano) c.lerp(new THREE.Color(0x3a3430), smooth(0.55, 0.85, fbm(x * 0.02 + 9, z * 0.02, 3)) * 0.6);
       col[k * 3] = c.r; col[k * 3 + 1] = c.g; col[k * 3 + 2] = c.b;
     }
+    this.hgrid = { xmin, z0, step, nx, nz, H: Float32Array.from(H) };
     const idx = new Uint32Array((nx - 1) * (nz - 1) * 6); let p = 0;
     for (let j = 0; j < nz - 1; j++) for (let i = 0; i < nx - 1; i++) { const a = j * nx + i, b = a + 1, d = a + nx, e = d + 1; idx[p++] = a; idx[p++] = b; idx[p++] = d; idx[p++] = b; idx[p++] = e; idx[p++] = d; }
     const g = new THREE.BufferGeometry();

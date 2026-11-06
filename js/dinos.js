@@ -302,6 +302,12 @@ function smoothAll(root) {
 function findClip(clips, re) { return clips.find(c => re.test(c.name)); }
 
 /* ---------------- Dino ---------------- */
+const BLOB_G = new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2); BLOB_G.userData.keep = true;
+let BLOB_T = null;
+function blobMat() {
+  if (!BLOB_T) { const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d'), gr = g.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(0,0,0,0.75)'); gr.addColorStop(0.5, 'rgba(0,0,0,0.45)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); BLOB_T = new THREE.CanvasTexture(c); }
+  return new THREE.MeshBasicMaterial({ map: BLOB_T, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, fog: true });
+}
 let uid = 0;
 export class Dino {
   constructor(kind, opts = {}) {
@@ -315,6 +321,10 @@ export class Dino {
     if (pack && sp.type !== 'flyer') this.fromPack(pack); else this.procedural(opts.variant || 0);
     this.root.scale.setScalar(this.size);
     this.hitMeshes = []; this.root.traverse(o => { if (o.isMesh) { o.userData.dino = this; if (!o.userData.part) o.userData.part = 'body'; this.hitMeshes.push(o); } });
+    // soft contact shadow so the animal looks planted even in shade
+    if (sp.type !== 'flyer') { const b = new THREE.Mesh(BLOB_G, blobMat()); b.scale.set(this.dims.halfW * 3.2 + 0.4, this.dims.len * 0.62, 1); b.position.y = 0.05; b.renderOrder = 1; b.raycast = () => {}; b.castShadow = false; this.root.add(b); this.blob = b; }
+    this.mass = Math.max(0.4, this.dims.len * this.size / 3);   // ~1 raptor, 2-4 big plant-eaters, 4+ giants
+    this.footPh = 0; this.dip = 0;
   }
   procedural(variant) {
     const sp = this.sp, pal = sp.pal[variant % sp.pal.length], base = sp.base || this.kind;
@@ -341,8 +351,20 @@ export class Dino {
     if (this.acts.death) { this.acts.death.setLoop(THREE.LoopOnce); this.acts.death.clampWhenFinished = true; }
     for (const k2 of ['attack', 'roar', 'hit', 'leap']) if (this.acts[k2]) this.acts[k2].setLoop(THREE.LoopOnce);
     this.cur = null; this.playAct('idle');
+    // feet calibration: the rest pose can differ from the animated pose, so measure the lowest skinned vertex
+    // over a short walk cycle once per model and drop the model onto the ground
+    const base = sp.base || this.kind;
+    if (pack.yFix == null) {
+      const v = new THREE.Vector3(); let low = 1e9, high = -1e9; this.playAct('walk');
+      for (let f = 0; f < 12; f++) { this.mixer.update(0.1); this.root.updateMatrixWorld(true);
+        obj.traverse(o => { if (!o.isSkinnedMesh) return; const pa = o.geometry.attributes.position, st = Math.max(1, Math.floor(pa.count / 400)); for (let i = 0; i < pa.count; i += st) { o.getVertexPosition(i, v); v.applyMatrix4(o.matrixWorld); if (v.y < low) low = v.y; if (v.y > high) high = v.y; } }); }
+      pack.yFix = low < 1e8 ? low : 0; pack.hFix = high > low ? high - low : null; this.playAct('idle');
+    }
+    obj.position.y -= pack.yFix; void base;
+    this._hFix = pack.hFix;
     obj.traverse(o => { if (o.isBone && /head/i.test(o.name) && !this.headBone) this.headBone = o; });
-    this.dims = { len: target, height: size.y * k, hipY: size.y * k * 0.45, halfW: Math.min(size.x, size.z) * k * 0.4, stride: target * 0.6 };
+    const hh = this._hFix || size.y * k;
+    this.dims = { len: target, height: hh, hipY: hh * 0.45, halfW: Math.min(size.x, size.z) * k * 0.4, stride: target * 0.6 };
   }
   playAct(name) {
     const a = this.acts[name] || this.acts.walk || this.acts.idle; if (!a || a === this.cur) return;
@@ -358,7 +380,7 @@ export class Dino {
   bodyWorld(out) { if (this.body && !this.gl) { this.body.updateWorldMatrix(true, false); return out.setFromMatrixPosition(this.body.matrixWorld); } return out.copy(this.pos).setY(this.pos.y + this.dims.height * 0.5 * this.size); }
 
   update(dt) {
-    this.t += dt; this.animT += dt; this.hitT = Math.max(0, this.hitT - dt);
+    this.t += dt; this.animT += dt; this.hitT = Math.max(0, this.hitT - dt); this.jolt = Math.max(0, (this.jolt || 0) - dt * 3.2);
     const sp = this.sp, D = this.dims, a = this.anim;
     this.root.rotation.y = this.heading;
     const stride = D.stride * (a === 'run' ? 1.25 : 1);
@@ -372,7 +394,17 @@ export class Dino {
     if (this.hitT > 0) jawT = Math.max(jawT, 0.5);
     if (a === 'dead') jawT = 0.25;
     this.jaw += (jawT - this.jaw) * Math.min(1, dt * 10);
-    if (this.mixer) { this.mixer.timeScale = a === 'walk' || a === 'run' ? clamp(Math.abs(this.speed) / (a === 'run' ? 6 : 2.5), 0.5, 2.2) : 1; this.mixer.update(dt); this.poseRoot(dt); return; }
+    // footfalls: one per half stride (drives thuds, dust, camera tremble in the game)
+    if ((a === 'walk' || a === 'run') && Math.abs(this.speed) > 0.3) {
+      const half = D.len * this.size * (a === 'run' ? 0.42 : 0.26); const before = Math.floor(this.footPh); this.footPh += Math.abs(this.speed) * dt / half;
+      if (Math.floor(this.footPh) !== before) { this.dip = 1; if (this.onStep) this.onStep(this, Math.floor(this.footPh) % 2 ? 1 : -1); }
+    }
+    this.dip = Math.max(0, this.dip - dt * 7);
+    if (this.mixer) {
+      // play walk/run at the speed the animal actually moves, so the feet do not skate
+      if (a === 'walk' || a === 'run') { const clip = this.cur && this.cur.getClip(), stride = D.len * this.size * (a === 'run' ? 0.85 : 0.5);
+        this.mixer.timeScale = clip ? clamp(Math.abs(this.speed) * clip.duration / stride, 0.35, 2.2) : 1; } else this.mixer.timeScale = 1;
+      this.mixer.update(dt); this.poseRoot(dt); return; }
     if (sp.type === 'flyer') return this.poseFlyer(dt);
     const run = a === 'run' ? 1 : a === 'walk' ? 0.7 : a === 'dead' ? 0 : 0.12, ph = this.ph;
     // legs
@@ -416,7 +448,9 @@ export class Dino {
       if (!this.gl || !this.acts.death) { this.tilt.rotation.z = this.fallSide * (Math.PI / 2 * 0.92) * k - this.fallSide * b; this.tilt.position.y = -(this.dims.hipY - this.dims.halfW) * k * 0.95; }
       if (t < 0.15) this.tilt.position.x = Math.sin(t * 60) * 0.05;
     } else {
-      this.tilt.rotation.z = Math.sin(this.hitT * 30) * 0.04 * this.flinchDir; this.tilt.position.y = 0;
+      const j = this.jolt || 0, je = j * j * (3 - 2 * j);   // hit jolt: rear back + lurch sideways, springs back
+      const dp = this.dip * this.dip * Math.min(0.06, 0.012 * this.mass) * this.dims.height;
+      this.tilt.rotation.z = Math.sin(this.hitT * 30) * 0.05 * this.flinchDir + je * 0.16 * this.flinchDir; this.tilt.rotation.x = -je * 0.24; this.tilt.position.y = je * 0.12 - dp;
       if (this.anim === 'leap' && !this.gl) this.tilt.position.y = Math.sin(clamp(this.animT / 0.6, 0, 1) * Math.PI) * 1.1;
       if (this.anim === 'attack' && !this.gl && this.dims.hipY * this.size < 1.4) this.tilt.position.y = Math.sin(clamp(this.animT / 0.8, 0, 1) * Math.PI) * 0.45;
     }
