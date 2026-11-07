@@ -30,6 +30,9 @@ SPECIES.bigTrike = Object.assign({}, SPECIES.trike, { base: 'trike', hp: 10, cry
 SPECIES.bigStego = Object.assign({}, SPECIES.stego, { base: 'stego', hp: 10, cry: 'bellowBig' });
 SPECIES.alphaRaptor = Object.assign({}, SPECIES.raptor, { base: 'raptor', hp: 10, cry: 'screech' });
 SPECIES.kingRex = Object.assign({}, SPECIES.rex, { base: 'rex', hp: 16, cry: 'roar' });
+SPECIES.shadowRex = Object.assign({}, SPECIES.rex, { base: 'rex', hp: 14, cry: 'roar', tint: 0x26304a, tintK: 0.5 });
+SPECIES.bigSpino = Object.assign({}, SPECIES.spino, { base: 'spino', hp: 14, cry: 'roar' });
+SPECIES.frostTrike = Object.assign({}, SPECIES.trike, { base: 'trike', hp: 12, cry: 'bellowBig', tint: 0x8fb8e6, tintK: 0.5 });
 
 /* ---------------- visibility: rim light, lighter fog, lifted shadows ---------------- */
 export const DINO_LOOK = { rim: { value: 0.4 }, rimColor: { value: new THREE.Color(0xfff0d6) }, fog: { value: 0.6 }, lift: { value: 0.07 } };
@@ -339,6 +342,7 @@ export class Dino {
     const base = sp.base || kind, pack = PACK[base];
     if (pack && sp.type !== 'flyer') this.fromPack(pack); else this.procedural(opts.variant || 0);
     this.root.scale.setScalar(this.size);
+    if (sp.tint) { const tc = new THREE.Color(sp.tint); this.root.traverse(o => { if (o.isMesh && o.material) { const tm = m => { const c = m.clone(); if (c.color) c.color.lerp(tc, sp.tintK || 0.4); return c; }; o.material = Array.isArray(o.material) ? o.material.map(tm) : tm(o.material); } }); }
     this.root.traverse(o => { if (o.isMesh && o !== this.blob) { if (Array.isArray(o.material)) o.material.forEach(dinoLook); else if (o.material && o.material.isMeshStandardMaterial) dinoLook(o.material); } });
     this.hitMeshes = []; this.root.traverse(o => { if (o.isMesh) { o.userData.dino = this; if (!o.userData.part) o.userData.part = 'body'; this.hitMeshes.push(o); } });
     // soft contact shadow so the animal looks planted even in shade

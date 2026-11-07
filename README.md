@@ -62,3 +62,4 @@ There are no accounts, ads, analytics or network calls. Everything is stored on 
 
 ## Updating
 Bump `VERSION` in `sw.js` and `js/game.js`, then run `deploy.sh` (only with Satoshi's OK). Open the app twice on the iPad to load the new version.
+- **v3.19:** third course Far Frontier (Moonlight Jungle, Lagoon Shore, Frozen Peaks; bosses Shadow Rex, giant Spinosaurus, Frost Horn); random weather shown on the intro card and never the same start twice in a row on a scene; grown-ups can record their own voice for 10 ranger moments (stored on the device only).

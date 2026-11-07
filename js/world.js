@@ -42,6 +42,24 @@ export const ENV = [
     hemiSky: 0xffd6a8, hemiGround: 0x5a5030, hemiI: 1.25, grass: [0x8a8a3a, 0xb8a850], dirt: 0x8e6a42, rock: 0x857a68, leaf: [0x4a6028, 0x6a8034], bark: 0x5a4330, mtn: 0x9a8090,
     veg: { broad: 55, palm: 35, fern: 120, grass: 1900, rock: 70, dead: 10 }, motes: 0xffe8b0,
   },
+  { // Moonlight Jungle: night ride, moonlight and fireflies
+    seed: 89, len: 430, trees: { n: 3, k: 1.6, near: 0.75, giants: 18 }, curve: [[9, 54, 1.6], [4, 22, 0.6]], hills: [[2.0, 40, 1.2], [1.0, 17, 0.4]], night: true,
+    skyTop: 0x16285a, skyHor: 0x5a74a8, fog: 0x415a86, fogNear: 18, fogFar: 150, sunDir: [0.35, 0.8, -0.35], sunCol: 0xc4d4ff, sunI: 2.8,
+    hemiSky: 0xa8bce8, hemiGround: 0x3a4a34, hemiI: 1.9, grass: [0x40603a, 0x5e7e4a], dirt: 0x7a6650, rock: 0x5c5e66, leaf: [0x1f3c26, 0x325838], bark: 0x3a3026, mtn: 0x3c4a66,
+    veg: { broad: 220, palm: 150, fern: 750, grass: 1200, rock: 110, dead: 20 }, motes: 0xd6ff70,
+  },
+  { // Lagoon Shore: turquoise lagoon on the left, palms and sand
+    seed: 97, len: 430, trees: { n: 2, k: 1.4, near: 0.75, giants: 8 }, curve: [[8, 58, 0.9], [3, 24, 1.8]], hills: [[1.0, 36, 0.6]], river: true, lagoon: true, waterY: -1.5,
+    skyTop: 0x3a8fdc, skyHor: 0xe6f2ee, fog: 0xcfe4e4, fogNear: 28, fogFar: 210, sunDir: [0.4, 0.8, 0.3], sunCol: 0xfff4dc, sunI: 3.2,
+    hemiSky: 0xd4ecff, hemiGround: 0x7a6a44, hemiI: 1.15, grass: [0x6a8a38, 0x9cb45a], dirt: 0xc8a874, rock: 0x9a8e7a, leaf: [0x3a6a2e, 0x5a9040], bark: 0x6a5238, mtn: 0x8fb0a8,
+    veg: { broad: 80, palm: 340, fern: 380, grass: 900, rock: 120, dead: 0 }, motes: 0xffffff,
+  },
+  { // Frozen Peaks: snowy pass between icy mountains, falling snow
+    seed: 103, len: 440, trees: { n: 2, k: 1.4, near: 0.8, giants: 6 }, curve: [[10, 50, 0.4], [4, 20, 2.4]], hills: [[3.0, 46, 0.2], [1.2, 18, 1.4]], snow: true,
+    skyTop: 0x7aa2cc, skyHor: 0xe4ecf4, fog: 0xd8e2ec, fogNear: 22, fogFar: 175, sunDir: [0.45, 0.5, 0.4], sunCol: 0xf4f8ff, sunI: 2.6,
+    hemiSky: 0xe6eeff, hemiGround: 0x7e8a96, hemiI: 1.25, grass: [0xc4ced6, 0xe2e9ee], dirt: 0x8a8580, rock: 0x666a72, leaf: [0x1c3628, 0x2a4a36], bark: 0x3a2e24, mtn: 0xc6d2de,
+    veg: { broad: 150, palm: 0, fern: 0, grass: 260, rock: 220, dead: 90 }, motes: 0xffffff,
+  },
 ];
 
 const tmpV = new THREE.Vector3();
@@ -220,7 +238,7 @@ export class World {
     this.waterMat = new THREE.MeshStandardMaterial({ color: 0x2e6f78, roughness: 0.12, metalness: 0.05, normalMap: nt, normalScale: new THREE.Vector2(0.35, 0.35), transparent: true, opacity: 0.88, envMapIntensity: 1.4 });
     const g = new THREE.PlaneGeometry(E.swamp ? 700 : 400, E.len + 400); g.rotateX(-Math.PI / 2);
     this.water = new THREE.Mesh(g, this.waterMat); this.water.position.set(E.swamp ? 0 : -60, E.waterY, -E.len / 2);
-    if (E.swamp) this.waterMat.color.set(0x3c5a3e); this.water.receiveShadow = true;
+    if (E.swamp) this.waterMat.color.set(0x3c5a3e); else if (E.lagoon) this.waterMat.color.set(0x2a9aa4); else this.waterMat.color.set(0x2e6f78); this.water.receiveShadow = true;
     this.root.add(this.water);
   }
 
@@ -249,7 +267,7 @@ export class World {
     for (let i = 0; i < N; i++) { pos[i * 3] = (r() - 0.5) * 60; pos[i * 3 + 1] = r() * 14; pos[i * 3 + 2] = (r() - 0.5) * 60; }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     const tex = radialTex([[0, 'rgba(255,255,255,1)'], [0.4, 'rgba(255,255,255,0.5)'], [1, 'rgba(255,255,255,0)']], 32);
-    this.motes = new THREE.Points(g, new THREE.PointsMaterial({ color: this.env.motes, size: this.env.volcano ? 0.16 : 0.09, map: tex, transparent: true, opacity: 0.75, depthWrite: false, blending: THREE.AdditiveBlending }));
+    this.motes = new THREE.Points(g, new THREE.PointsMaterial({ color: this.env.motes, size: this.env.volcano || this.env.night ? 0.16 : this.env.snow ? 0.12 : 0.09, map: tex, transparent: true, opacity: 0.75, depthWrite: false, blending: THREE.AdditiveBlending }));
     this.motes.frustumCulled = false; this.root.add(this.motes);
   }
 
@@ -355,23 +373,23 @@ export class World {
   updWeather(dt, cam) {
     const w = this.wx, t = this.wxT, k = Math.min(1, dt * 0.35), B = this.base, E = this.env; if (!B) return;
     for (const key in t) w[key] += (t[key] - w[key]) * k;
-    const gray = new THREE.Color(0x7d8790), dark = w.dark;
+    const gray = new THREE.Color(E.night ? 0x2a3242 : E.snow ? 0xb8c2cc : 0x7d8790), dark = w.dark;
     this.scene.fog.far = Math.max(45, E.fogFar * w.fogK); this.scene.fog.near = Math.min(E.fogNear, this.scene.fog.far * 0.12 + 4);
     this.scene.fog.color.copy(B.fog).lerp(gray, dark * 0.75); this.scene.background.copy(this.scene.fog.color);
     const u = this.sky.material.uniforms; u.top.value.copy(B.top).lerp(gray, dark * 0.85); u.hor.value.copy(B.hor).lerp(gray, dark * 0.8); u.fogc.value.copy(this.scene.fog.color);
     u.sunCol.value.set(E.sunCol).multiplyScalar(1 - dark * 0.95);
     this.mtn.material.color.setScalar(1 - dark * 0.45);
     // lightning in storms
-    if (w.storm > 0.6 && (this.boltT -= dt) <= 0) { this.boltT = 5 + Math.random() * 7; this.lightning = 1; if (this.onLightning) this.onLightning(); }
+    if (w.storm > 0.6 && !E.snow && (this.boltT -= dt) <= 0) { this.boltT = 5 + Math.random() * 7; this.lightning = 1; if (this.onLightning) this.onLightning(); }
     this.lightning = Math.max(0, this.lightning - dt * 3.5);
     const fl = this.lightning > 0.6 || (this.lightning > 0.2 && this.lightning < 0.35) ? this.lightning : 0;
     this.sun.intensity = B.sunI * (1 - dark * 0.85); this.hemi.intensity = B.hemiI * (1 - dark * 0.35) + fl * 4;
     if (this.terrain) this.terrain.material.roughness = 0.96 - w.rain * 0.4;
     // rain streaks
-    this.rain.visible = w.rain > 0.02; this.rain.material.opacity = w.rain * 0.5;
+    this.rain.visible = w.rain > 0.02; this.rain.material.opacity = w.rain * (E.snow ? 0.95 : 0.5); this.rain.material.color.set(E.snow ? 0xffffff : 0xc8d4dc);
     if (this.rain.visible) { this.rain.position.set(cam.position.x, cam.position.y - 6, cam.position.z);
-      const p = this.rain.geometry.attributes.position, a = p.array, fall = 20 * dt;
-      for (let i = 0; i < a.length; i += 6) { let y = a[i + 1] - fall; if (y < 0) y += 24; a[i + 1] = y; a[i + 4] = y + 0.6; }
+      const p = this.rain.geometry.attributes.position, a = p.array, fall = (E.snow ? 2.6 : 20) * dt, seg = E.snow ? 0.09 : 0.6, tt = this.time;
+      for (let i = 0; i < a.length; i += 6) { let y = a[i + 1] - fall; if (y < 0) y += 24; a[i + 1] = y; a[i + 4] = y + seg; if (E.snow) { const dx = Math.sin(tt * 0.9 + i) * dt * 0.6; a[i] += dx; a[i + 3] = a[i] + 0.06; } }
       p.needsUpdate = true; }
   }
 
@@ -464,6 +482,6 @@ export class World {
     if (this.volcano) { this.volcano.position.x = cam.position.x - 170; this.volcano.position.z = cam.position.z - 620;
       for (const s of this.smoke) { const u = (s.userData.u + this.time * 0.02) % 1; s.position.set(u * 120 + Math.sin(u * 9) * 8, 175 + u * 260, 0); const k = 40 + u * 160; s.scale.set(k, k, 1); s.material.opacity = 0.75 * (1 - u); } }
     if (this.motes) { this.motes.position.set(cam.position.x, cam.position.y - 3, cam.position.z);
-      const p = this.motes.geometry.attributes.position; for (let i = 0; i < p.count; i++) { let y = p.getY(i) + dt * (this.env.volcano ? 0.6 : 0.12); if (y > 14) y = 0; p.setY(i, y); p.setX(i, p.getX(i) + Math.sin(this.time + i) * dt * 0.2); } p.needsUpdate = true; }
+      const p = this.motes.geometry.attributes.position; for (let i = 0; i < p.count; i++) { let y = p.getY(i) + dt * (this.env.volcano ? 0.6 : this.env.snow ? -1.1 : this.env.night ? Math.sin(this.time * 1.3 + i) * 0.5 : 0.12); if (y > 14) y = 0; if (y < 0) y = 14; p.setY(i, y); p.setX(i, p.getX(i) + Math.sin(this.time + i) * dt * 0.2); } p.needsUpdate = true; }
   }
 }

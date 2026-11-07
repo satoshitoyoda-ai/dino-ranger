@@ -7,9 +7,9 @@ import { Dino, SPECIES, loadPack, PACK, DINO_LOOK } from './dinos.js';
 import { Cockpit, makeDart } from './rifle.js';
 import { FX } from './fx.js';
 import { Convoy } from './convoy.js';
-import { audioBind, audioInit, sfx, cry, say, musicStart, musicStop, audioTick, ambOff, AC, setRain } from './audio.js';
+import { audioBind, audioInit, sfx, cry, say, musicStart, musicStop, audioTick, ambOff, AC, setRain, englishVoices, resetVoice, LINES, loadRecordings, hasRec, saveRec, delRec, playRec, stopRec, startRecording, stopRecording, recording } from './audio.js';
 
-export const VERSION = '3.17.0';
+export const VERSION = '3.19.0';
 
 /* ================= settings (this device only) ================= */
 const SKEY = 'dinoRanger.v1';
@@ -42,9 +42,16 @@ const LEVELS = [
     boss: 'alphaRaptor', bossSize: 2.6, bossHp: [30, 45], bossRoll: 0, bossSay: "That's the Alpha Raptor! It's fast. Keep firing!", kinds: { raptor: 4, trike: 1, ptera: 0.7 }, root: 44 },
   { name: 'Sunset Plains', emoji: '🌅', say: 'Sunset Plains. Giant herds all around. Final mission, ranger!',
     boss: 'kingRex', bossSize: 1.3, bossHp: [40, 60], bossRoll: 1.8, bossSay: "It's the King Rex! The biggest one of all!", kinds: { raptor: 2, trike: 1.5, stego: 1, ptera: 1 }, root: 41, herd: true },
+  { name: 'Moonlight Jungle', emoji: '🌙', say: 'Moonlight Jungle. It is dark out here, ranger. Look for the shining eyes!',
+    boss: 'shadowRex', bossSize: 1.1, bossHp: [35, 50], bossRoll: 1.8, bossSay: "It's the Shadow Rex! It hides in the dark. Fire!", kinds: { raptor: 3.5, trike: 1, ptera: 0.6 }, root: 43 },
+  { name: 'Lagoon Shore', emoji: '🏝️', say: 'Lagoon Shore! Sunny beach, blue water. Watch the palm trees!',
+    boss: 'bigSpino', bossSize: 1.35, bossHp: [35, 50], bossRoll: 0, bossSay: 'A giant Spinosaurus out of the lagoon! Fire, fire, fire!', kinds: { raptor: 2, ptera: 2.2, stego: 1, trike: 0.8 }, root: 45 },
+  { name: 'Frozen Peaks', emoji: '❄️', say: 'Frozen Peaks. Brrr, it is snowy! Final mission, ranger!',
+    boss: 'frostTrike', bossSize: 2.3, bossHp: [40, 60], bossRoll: 0, bossSay: "The giant Frost Horn! It's the strongest one. Keep firing!", kinds: { raptor: 2.5, trike: 1.6, stego: 1 }, root: 40, herd: true },
 ];
 const SET = 3;   // each course has 3 levels; a ride plays from the chosen level to the end of its course
-const COURSES = [{ name: 'Jungle Trail', emoji: '🌴', first: 0 }, { name: 'Wild Lands', emoji: '🗺️', first: 3 }];
+const COURSES = [{ name: 'Jungle Trail', emoji: '🌴', first: 0 }, { name: 'Wild Lands', emoji: '🗺️', first: 3 }, { name: 'Far Frontier', emoji: '🧭', first: 6 }];
+const TEETH = ['rex', 'spino', 'kingRex', 'alphaRaptor', 'shadowRex', 'bigSpino'];
 const GUIDE = ['raptor', 'trike', 'stego', 'ptera', 'spino', 'rex'];
 const RIDE = 6.5;
 audioBind(S, ACT, () => (LEVELS[G ? G.level : 0] || LEVELS[0]).root);
@@ -251,7 +258,7 @@ function damage(d, dmg, wp, dir, head, fxK = 1) {
   d.hitT = 0.35; d.stun = 0.7; d.flinchDir = Math.random() < 0.5 ? -1 : 1;
   if (head) pop(wp, '★★');
   if (d.boss) { const before = Math.floor(d.fed); d.fed += dmg; d.jolt *= 0.4;
-    if (!d.enraged && d.fed >= d.hp / 2 && d.fed < d.hp) { d.enraged = true; setSub(d, 'roar'); G.shake = Math.max(G.shake, 0.5); say("It's getting angry! Keep firing, ranger!", true); } const n = Math.floor(d.fed) - before; if (n > 0) star(wp, Math.min(n, 4)); if (d.fed >= d.hp) bossDone(); else cry(d.sp.cry, 0.4); return; }
+    if (!d.enraged && d.fed >= d.hp / 2 && d.fed < d.hp) { d.enraged = true; setSub(d, 'roar'); G.shake = Math.max(G.shake, 0.5); say("It's getting angry! Keep firing, ranger!", true, 'alert', 'angry'); } const n = Math.floor(d.fed) - before; if (n > 0) star(wp, Math.min(n, 4)); if (d.fed >= d.hp) bossDone(); else cry(d.sp.cry, 0.4); return; }
   d.hp -= dmg;
   if (d.hp <= 0) { killDino(d, wp, head); G.hitStop = 0.07; mark(wp, true); buzz(40); } else { cry(d.sp.cry, 0.6); if (head) G.hitStop = 0.04; }
 }
@@ -371,7 +378,7 @@ function spawnBoss() {
   const lv = L(), b = mkDino(lv.boss, lv.bossSize); b.boss = true; b.hp = lv.bossHp[D().hpIdx]; b.fed = 0; b.mode = 'walk'; b.sub = 'in'; b.subT = 0; b.fwd = 40; b.lat = 2.5;
   G.boss = b; G.vT = lv.bossRoll; G.phase = 'bossIn';
   for (const d of G.dinos) if (d.mode !== 'dead') { d.mode = 'leave'; d.t = 0; d.leaveSide = d.side || 1; }
-  say(lv.bossSay);
+  say(lv.bossSay, true, 'alert', 'boss');
 }
 function setSub(b, s) { b.sub = s; b.subT = 0; if (s === 'roar') { b.setAnim('roar'); cry(b.sp.cry); G.shake = Math.max(G.shake, ACT() ? 0.35 : 0.08); } }
 function updBoss(b, dt) {
@@ -400,7 +407,7 @@ function bossDone() {
   const b = G.boss; b.mode = 'dead'; b.setAnim('dead'); b.deadT = 0; G.phase = 'done'; G.doneT = 0; G.vT = 0;
   cry(b.sp.cry, 1); if (!BLOOD()) setTimeout(() => sfx.sleepy(true), 600); setTimeout(() => sfx.fanfare(), 1700);
   star(b.bodyWorld(new THREE.Vector3()), 5); meet(b.kind);
-  say((BLOOD() ? "It's down!" : "It's asleep!") + ' Great shot, ranger' + nameBit() + '!');
+  say((BLOOD() ? "It's down!" : "It's asleep!") + ' Great shot, ranger' + nameBit() + '!', true, 'cheer', 'down');
 }
 const nameBit = () => (S.name ? ', ' + S.name : '');
 
@@ -426,7 +433,7 @@ function courseOf(i) { return Math.floor(i / SET); }
 // course & level picker (title ▶ opens it)
 function openCourses() {
   const lim = +S.ridesPerDay;
-  if (lim > 0 && ridesToday() >= lim) { G.state = 'rest'; show('rest'); say("The dinosaurs are sleeping. Let's go on a new mission tomorrow" + nameBit() + '!'); return; }
+  if (lim > 0 && ridesToday() >= lim) { G.state = 'rest'; show('rest'); say("The dinosaurs are sleeping. Let's go on a new mission tomorrow" + nameBit() + '!', true, 'calm', 'sleep'); return; }
   G.state = 'courses'; const box = $('clist'); box.innerHTML = '';
   S.best = S.best || {};
   COURSES.forEach((c, ci) => {
@@ -436,25 +443,25 @@ function openCourses() {
     for (let k = 0; k < SET; k++) {
       const i = c.first + k, lv = LEVELS[i]; if (!lv) continue;
       const b = document.createElement('button'); b.className = 'lvl';
-      b.innerHTML = '<span class="ln">' + (k + 1) + '</span><span class="le">' + lv.emoji + '</span><span class="lt">' + lv.name + '</span><span class="lb">' + (['rex', 'spino', 'kingRex', 'alphaRaptor'].includes(lv.boss) ? '🦖' : '🦕') + (S.best[i] ? ' ⭐' + S.best[i] : '') + '</span>';
+      b.innerHTML = '<span class="ln">' + (k + 1) + '</span><span class="le">' + lv.emoji + '</span><span class="lt">' + lv.name + '</span><span class="lb">' + (TEETH.includes(lv.boss) ? '🦖' : '🦕') + (S.best[i] ? ' ⭐' + S.best[i] : '') + '</span>';
       b.addEventListener('click', e => { e.preventDefault(); audioInit(); sfx.ui(); startRide(i); });
       row.appendChild(b);
     }
     card.appendChild(row); box.appendChild(card);
   });
-  show('courses'); say('Pick a course, ranger!', true);
+  show('courses'); say('Pick a course, ranger!', true, 'radio', 'pick');
 }
 function startRide(i) {
   const lim = +S.ridesPerDay;
-  if (lim > 0 && ridesToday() >= lim) { G.state = 'rest'; show('rest'); say("The dinosaurs are sleeping. Let's go on a new mission tomorrow" + nameBit() + '!'); return; }
+  if (lim > 0 && ridesToday() >= lim) { G.state = 'rest'; show('rest'); say("The dinosaurs are sleeping. Let's go on a new mission tomorrow" + nameBit() + '!', true, 'calm', 'sleep'); return; }
   ridesToday(); S.rides++; save(); G.score = 0; G.courseEnd = courseOf(i) * SET + SET - 1; G.ride = newStats(); G.ride.course = courseOf(i); G.ride.from = i; startLevel(i);
 }
 function startLevel(i) {
   const lv = LEVELS[i];
-  $('iEmoji').textContent = lv.emoji; $('iName').textContent = lv.name; dots($('iDots'), i, i);
-  G.state = 'intro'; G.introT = 99; G.vT = 0; show('intro'); say(lv.say);   // hold the intro until the new track is built
+  $('iEmoji').textContent = lv.emoji; $('iName').textContent = lv.name; dots($('iDots'), i, i); const wx = chooseWeather(i); $('iWx').textContent = wxIcon(wx[0], i) + ' ' + wxName(wx[0], i) + (wx[1] ? '  →  ' + wxIcon(wx[1], i) + ' ?' : '');
+  G.state = 'intro'; G.introT = 99; G.vT = 0; show('intro'); say(lv.say, true, 'calm', 'start');   // hold the intro until the new track is built
   setTimeout(() => { // build after the card is painted
-    buildLevel(i); G.pointers.clear(); G.phase = 'ride'; G.spawnT = 2.5; G.levelScore = 0; G.energy = 100; planWeather(); G.ms = newStats(); G.aim = { x: W / 2, y: H * 0.45 }; G.introT = 2.4;
+    buildLevel(i); G.pointers.clear(); G.phase = 'ride'; G.spawnT = 2.5; G.levelScore = 0; G.energy = 100; planWeather(wx); G.ms = newStats(); G.aim = { x: W / 2, y: H * 0.45 }; G.introT = 2.4;
   }, 60);
 }
 // jeep energy: bites drain it; at zero the mission is over (grown-ups can switch this off)
@@ -473,7 +480,7 @@ function ouch(big) {
   G.hitStop = Math.max(G.hitStop, big ? 0.1 : 0.07); cockpit.knock(); sfx.hurt(); buzz([60, 40, 90]);
   const a = rnd(-0.5, 0.5); G.scratch = { t: 0, a, x: W * rnd(0.3, 0.7), y: H * rnd(0.3, 0.6) };
   if (BLOOD()) for (let i = 0; i < (big ? 7 : 5); i++) { const edge = Math.random() < 0.5; G.splats.push({ x: edge ? (Math.random() < 0.5 ? rnd(0, W * 0.2) : rnd(W * 0.8, W)) : rnd(0, W), y: edge ? rnd(0, H) : rnd(0, H * 0.25), r: rnd(25, 75) * k, t: 0, drip: rnd(30, 90) }); }
-  if (Math.random() < 0.3) say(pick(['Hang on, ranger!', 'Ouch! Keep firing!', "We're okay! Shoot it!"]), false);
+  if (Math.random() < 0.3) say(pick(['Hang on, ranger!', 'Ouch! Keep firing!', "We're okay! Shoot it!"]), false, 'alert', 'hurt');
 }
 function hurt(n) {
   if (!S.energy || G.state !== 'play' || G.phase === 'done') return;
@@ -500,17 +507,23 @@ function openRecords() {
 function gameOver() {
   if (G.ride) recordRide(false);
   G.state = 'over'; G.vT = 0; G.pointers.clear(); musicStop(); show('over');
-  say('Oh no! The jeep is out of energy. Tap play to try again, ranger' + nameBit() + '!');
+  say('Oh no! The jeep is out of energy. Tap play to try again, ranger' + nameBit() + '!', true, 'radio', 'over');
 }
 // weather: each mission starts with one kind and may change once on the way
+const WX_SAY_SNOW = { rain: "It's starting to snow, ranger!", fog: 'Fog is rolling in. Watch closely!', storm: 'A blizzard! Hold on tight!', clear: 'The sky is clearing up!' };
 const WX_SAY = { rain: "It's starting to rain, ranger!", fog: 'Fog is rolling in. Watch closely!', storm: 'A thunderstorm! Hold on tight!', clear: 'The sky is clearing up!' };
 const WX_ICON = { clear: '☀️', rain: '🌧️', fog: '🌫️', storm: '⛈️' };
-function planWeather() {
+const SNOWY = i => i === 8;
+const wxName = (k, i) => i === 6 && k === 'clear' ? 'Clear night' : SNOWY(i) ? ({ clear: 'Sunny', rain: 'Snow', fog: 'Fog', storm: 'Blizzard' })[k] : ({ clear: 'Sunny', rain: 'Rain', fog: 'Fog', storm: 'Thunderstorm' })[k];
+const wxIcon = (k, i) => i === 6 && k === 'clear' ? '🌙' : SNOWY(i) ? ({ clear: '☀️', rain: '🌨️', fog: '🌫️', storm: '❄️' })[k] : WX_ICON[k];
+function chooseWeather(i) {
   const pref = S.weather || 'random';
-  if (pref !== 'random') { G.wx = [pref]; G.wxAt = 1e9; world.setWeather(pref, true); return; }
-  const start = pick(['clear', 'clear', 'rain', 'fog', 'storm']); let next = pick(['clear', 'rain', 'fog', 'storm'].filter(k => k !== start));
-  G.wx = [start, next]; G.wxAt = world.env.len * rnd(0.35, 0.6); world.setWeather(start, true);
+  if (pref !== 'random') return [pref];
+  S.lastWx = S.lastWx || {}; const last = S.lastWx[i];
+  const start = pick(['clear', 'clear', 'rain', 'fog', 'storm', 'rain'].filter(k => k !== last)); S.lastWx[i] = start; save();
+  return Math.random() < 0.7 ? [start, pick(['clear', 'rain', 'fog', 'storm'].filter(k => k !== start))] : [start];
 }
+function planWeather(wx) { G.wx = wx; G.wxAt = wx[1] ? world.env.len * rnd(0.35, 0.6) : 1e9; world.setWeather(wx[0], true); }
 world.onLightning = () => { G.flash = Math.max(G.flash, 0.6); setTimeout(() => sfx.thunder(), 150); };
 function beginPlay() { G.state = 'play'; G.vT = RIDE; show(null); musicStart(); }
 const pct = (a, b) => (b ? Math.round(a / b * 100) : 0);
@@ -527,7 +540,7 @@ function levelClear() {
   if (G.level >= Math.min(LEVELS.length - 1, G.courseEnd ?? 2)) recordRide(true);
   save();
   S.best = S.best || {}; S.best[G.level] = Math.max(S.best[G.level] || 0, G.levelScore); save();
-  if (G.level >= Math.min(LEVELS.length - 1, G.courseEnd ?? 2)) { G.state = 'end'; $('eStars').textContent = G.score; $('eStats').innerHTML = G.ride ? statRow(G.ride, G.prevRide) : ''; $('eBest').style.display = G.rideBest ? 'block' : 'none'; show('end'); setTimeout(() => say((BLOOD() ? 'Mission complete! You stopped every dinosaur. Great job, ranger' : 'Mission complete! All the dinosaurs are safe and sleeping. Great job, ranger') + nameBit() + '!'), 400); return; }
+  if (G.level >= Math.min(LEVELS.length - 1, G.courseEnd ?? 2)) { G.state = 'end'; $('eStars').textContent = G.score; $('eStats').innerHTML = G.ride ? statRow(G.ride, G.prevRide) : ''; $('eBest').style.display = G.rideBest ? 'block' : 'none'; show('end'); setTimeout(() => say((BLOOD() ? 'Mission complete! You stopped every dinosaur. Great job, ranger' : 'Mission complete! All the dinosaurs are safe and sleeping. Great job, ranger') + nameBit() + '!', true, 'cheer', 'complete'), 400); return; }
   G.state = 'clear'; $('cStars').textContent = G.levelScore; dots($('cDots'), G.level + 1, G.level); show('clear');
 }
 function pauseGame() { if (G.state !== 'play') return; G.state = 'paused'; G.pointers.clear(); musicStop(); show('pause'); }
@@ -594,7 +607,7 @@ function update(dt) {
       const active = G.dinos.filter(d => d.mode !== 'dead' && d.mode !== 'leave').length;
       if (G.spawnT <= 0 && G.s < env.len - 30) { if (active < D().max + 2) spawnWave(); else G.spawnT = 0.6; }
       if (G.s >= env.len) spawnBoss();
-      if (G.s >= G.wxAt && G.wx[1]) { world.setWeather(G.wx[1]); G.wxAt = 1e9; say(WX_SAY[G.wx[1]], false); }
+      if (G.s >= G.wxAt && G.wx[1]) { world.setWeather(G.wx[1]); G.wxAt = 1e9; say((SNOWY(G.level) ? WX_SAY_SNOW : WX_SAY)[G.wx[1]], false, 'alert', 'weather'); }
     }
     G.cool = Math.max(0, (G.cool || 0) - dt);
     for (const p of G.pointers.values()) { p.hold += dt; if (p.hold >= 0.12 && G.cool <= 0) fire(p.x, p.y); }
@@ -613,8 +626,8 @@ function update(dt) {
   cockpit.aimAt(dc, dt); cockpit.update(dt);
   fx.update(dt); world.update(dt, camera);
   // dinosaur visibility: stronger rim light in dark missions and bad weather
-  if (world.env) { const dark = world.env.trees || world.env.volcano || world.env.swamp ? 0.42 : 0.28, w = world.wx || { dark: 0, fogK: 1 };
-    DINO_LOOK.rim.value = dark + w.dark * 0.35 + (1 - w.fogK) * 0.25; DINO_LOOK.lift.value = (world.env.trees || world.env.volcano ? 0.09 : 0.05) + w.dark * 0.06; DINO_LOOK.fog.value = 0.6 - (1 - w.fogK) * 0.15; } if (AC) setRain(live && G.state !== 'title' ? world.wx.rain : 0);
+  if (world.env) { const dark = world.env.snow ? 0.16 : world.env.night ? 0.45 : world.env.trees || world.env.volcano || world.env.swamp ? 0.42 : 0.28, w = world.wx || { dark: 0, fogK: 1 };
+    DINO_LOOK.rim.value = dark + w.dark * 0.35 + (1 - w.fogK) * 0.25; DINO_LOOK.lift.value = (world.env.night ? 0.1 : world.env.trees || world.env.volcano ? 0.09 : 0.05) + w.dark * 0.06; DINO_LOOK.fog.value = 0.6 - (1 - w.fogK) * 0.15; } if (AC) setRain(live && G.state !== 'title' ? world.wx.rain : 0);
   if (G.state === 'play' && G.ms) { G.ms.t += dt; if (G.ride) G.ride.t += dt; }
   for (const s of G.stars) { s.t += dt; if (s.t >= s.dur && !s.done) { s.done = true; G.score++; G.levelScore++; stat('stars'); G.hudBump = 1; sfx.ding(); } }
   G.stars = G.stars.filter(s => !s.done); for (const m of G.marks) m.t += dt; G.marks = G.marks.filter(m => m.t < 0.22);
@@ -666,9 +679,9 @@ function drawHUD() {
     hx.fillStyle = 'rgba(243,235,211,0.85)'; rr(cx - w / 2 - 12, y - 17, w + 24, 34, 10); hx.fill(); hx.lineWidth = 3; hx.strokeStyle = '#2E2A1E'; hx.stroke();
     hx.fillStyle = '#E8873A'; rr(cx - w / 2 - 5, y - 10, (w + 10) * u + 4, 20, 6); hx.fill();
     hx.fillStyle = '#F3EBD3'; hx.beginPath(); hx.arc(cx + w / 2 + 18, y, 28, 0, 7); hx.fill(); hx.stroke();
-    hx.font = '32px system-ui, sans-serif'; hx.textAlign = 'center'; hx.fillText(['rex', 'spino', 'kingRex', 'alphaRaptor'].includes(L().boss) ? '🦖' : '🦕', cx + w / 2 + 18, y + 2); hx.textAlign = 'start';
+    hx.font = '32px system-ui, sans-serif'; hx.textAlign = 'center'; hx.fillText(TEETH.includes(L().boss) ? '🦖' : '🦕', cx + w / 2 + 18, y + 2); hx.textAlign = 'start';
     hx.fillStyle = '#4E5B30'; hx.strokeStyle = '#2E2A1E'; hx.lineWidth = 3; rr(cx - w / 2 + w * u - 16, y - 11, 32, 22, 6); hx.fill(); hx.stroke();
-    hx.font = '30px system-ui, sans-serif'; hx.textAlign = 'center'; hx.fillText(WX_ICON[world.wxKind] || '☀️', cx - w / 2 - 38, y + 2); hx.textAlign = 'start';
+    hx.font = '30px system-ui, sans-serif'; hx.textAlign = 'center'; hx.fillText(wxIcon(world.wxKind || 'clear', G.level) || '☀️', cx - w / 2 - 38, y + 2); hx.textAlign = 'start';
   } else if (G.boss) {
     const w = Math.min(460, W * 0.4), u = clamp(G.boss.fed / G.boss.hp, 0, 1);
     hx.fillStyle = 'rgba(243,235,211,0.9)'; rr(cx - w / 2 - 12, y - 20, w + 24, 40, 12); hx.fill(); hx.lineWidth = 3; hx.strokeStyle = '#2E2A1E'; hx.stroke();
@@ -760,19 +773,54 @@ function gearTick() { const p = Math.min(100, (performance.now() - gearStart) / 
 function gearCancel() { cancelAnimationFrame(gearT); gearT = null; $('bGear').style.setProperty('--p', 0); }
 $('bGear').addEventListener('pointerdown', e => { e.preventDefault(); gearStart = performance.now(); gearT = requestAnimationFrame(gearTick); });
 ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => $('bGear').addEventListener(ev, () => { if (gearT) gearCancel(); }));
+function fillVoices() {
+  const sel = $('pVoiceName'), list = englishVoices(); sel.innerHTML = '';
+  const auto = document.createElement('option'); auto.value = ''; auto.textContent = 'Auto (most natural available)' + (list[0] ? ' - ' + list[0].name : ''); sel.appendChild(auto);
+  for (const v of list.slice(0, 25)) { const o = document.createElement('option'); o.value = v.name; o.textContent = v.name + ' (' + v.lang + ')'; sel.appendChild(o); }
+  sel.value = S.voiceName || '';
+}
 function openParent() {
   G.state = 'parent';
-  $('pInt').value = S.intensity; $('pBlood').checked = S.blood !== false; $('pDiff').value = S.diff; $('pSound').checked = S.sound; $('pMusic').checked = S.music; $('pVoice').checked = S.voice; $('pEnergy').checked = S.energy !== false; $('pWeather').value = S.weather || 'random'; $('pRides').value = String(S.ridesPerDay); $('pName').value = S.name;
+  $('pInt').value = S.intensity; $('pBlood').checked = S.blood !== false; $('pDiff').value = S.diff; $('pSound').checked = S.sound; $('pMusic').checked = S.music; $('pVoice').checked = S.voice; $('pEnergy').checked = S.energy !== false; fillVoices(); $('pWeather').value = S.weather || 'random'; $('pRides').value = String(S.ridesPerDay); $('pName').value = S.name;
   const lim = +S.ridesPerDay;
   $('pStat').textContent = 'Missions today: ' + ridesToday() + (lim ? ' of ' + lim : '') + ' · Stars so far: ' + S.totalStars + ' · Species found: ' + GUIDE.filter(k => S.seen[k]).length + ' of ' + GUIDE.length;
   $('pVer').textContent = 'Dino Ranger: Jungle Run v' + VERSION + ' · 3D' + (Object.keys(PACK).length ? ' · models: ' + Object.keys(PACK).join(', ') : ' · built-in models') + ' · ' + Math.round(G.fps) + ' fps';
   show('parent');
 }
+$('pVoiceTest').addEventListener('click', e => { e.preventDefault(); const keep = S.voiceName; S.voiceName = $('pVoiceName').value; resetVoice(); const on = S.voice; S.voice = true; say('Ranger, this is Fern Valley. Dinosaurs ahead! Fire, fire, fire!', true, 'alert'); S.voice = on; S.voiceName = keep; resetVoice(); });
 $('pReset').addEventListener('click', () => { S.rides = 0; S.today = todayStr(); save(); openParent(); });
 $('pDone').addEventListener('click', () => {
-  S.intensity = $('pInt').value; S.blood = $('pBlood').checked; S.diff = $('pDiff').value; S.sound = $('pSound').checked; S.music = $('pMusic').checked; S.voice = $('pVoice').checked; S.energy = $('pEnergy').checked; S.weather = $('pWeather').value; S.ridesPerDay = +$('pRides').value; S.name = $('pName').value.trim().slice(0, 20);
+  S.intensity = $('pInt').value; S.blood = $('pBlood').checked; S.diff = $('pDiff').value; S.sound = $('pSound').checked; S.music = $('pMusic').checked; S.voice = $('pVoice').checked; S.energy = $('pEnergy').checked; S.voiceName = $('pVoiceName').value; resetVoice(); S.weather = $('pWeather').value; S.ridesPerDay = +$('pRides').value; S.name = $('pName').value.trim().slice(0, 20);
   save(); G.state = 'title'; show('title');
 });
+
+/* ================= recorded ranger lines (grown-ups) ================= */
+let recKey = null, recTimer = 0;
+function openVoice() { G.state = 'voice'; musicStop(); drawVoice(); show('voice'); }
+function drawVoice() {
+  const box = $('vlist'); box.innerHTML = '';
+  for (const [k, label, hint] of LINES) {
+    const row = document.createElement('div'); row.className = 'vrow' + (hasRec(k) ? ' has' : '') + (recKey === k ? ' rec' : '');
+    row.innerHTML = '<div class="vt"><b>' + (hasRec(k) ? '✅ ' : '') + label + '</b><i>e.g. “' + hint + '”</i></div>';
+    const mk = (txt, cls, fn, off) => { const b = document.createElement('button'); b.type = 'button'; b.className = cls; b.textContent = txt; b.disabled = !!off; b.addEventListener('click', e => { e.preventDefault(); fn(); }); row.appendChild(b); };
+    mk(recKey === k ? '■ Stop' : '● Record', 'vrec', () => toggleRec(k), recKey && recKey !== k);
+    mk('▶', 'vplay', () => { audioInit(); playRec(k); }, !hasRec(k) || recKey);
+    mk('🗑', 'vdel', () => { delRec(k).then(drawVoice); }, !hasRec(k) || recKey);
+    box.appendChild(row);
+  }
+}
+async function toggleRec(k) {
+  audioInit();
+  if (recKey === k) { clearTimeout(recTimer); const b = await stopRecording(); recKey = null; if (b) { await saveRec(k, b); playRec(k); } else $('vMsg').textContent = 'Nothing was recorded. Try again, a little closer to the iPad.'; drawVoice(); return; }
+  if (recKey || recording()) return;
+  stopRec(); if (window.speechSynthesis) speechSynthesis.cancel();
+  try { await startRecording(); } catch (e) { $('vMsg').textContent = 'The microphone is not available. Allow it for this site in Settings → Safari → Microphone (or the address-bar ⓘ), then try again.'; return; }
+  recKey = k; $('vMsg').textContent = 'Recording… say the line, then tap ■ Stop (stops by itself after 8 seconds).'; drawVoice();
+  recTimer = setTimeout(() => { if (recKey === k) toggleRec(k); }, 8000);
+}
+$('pRecord').addEventListener('click', e => { e.preventDefault(); $('vMsg').textContent = ''; openVoice(); });
+$('vDone').addEventListener('click', async e => { e.preventDefault(); if (recKey) { clearTimeout(recTimer); const b = await stopRecording(); if (b) await saveRec(recKey, b); recKey = null; } openParent(); });
+loadRecordings().then(() => { if (G.state === 'voice') drawVoice(); });
 
 /* ================= orientation, visibility, boot ================= */
 function checkOrient() { const portraitMode = H > W * 1.05; $('rotate').classList.toggle('on', portraitMode); if (portraitMode) pauseGame(); }

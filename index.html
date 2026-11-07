@@ -68,7 +68,7 @@
   .dots i.now { background: #E8873A; border-color: #9C5520; }
   .starbig { display: flex; align-items: center; gap: 14px; font-size: 96px; font-weight: 900; }
   .starbig svg { width: 120px; height: 120px; }
-  #courses { background: rgba(20,18,10,.55); gap: 22px; }
+  #courses { background: rgba(20,18,10,.55); gap: 10px; }
   .stats { display: flex; gap: 18px; font-size: 30px; font-weight: 800; flex-wrap: wrap; justify-content: center; }
   .stats i { font-style: normal; font-size: 22px; } .stats .up { color: #2f9e3a; } .stats .dn { color: #c8402a; } .stats .eq { color: #8a7a50; }
   .best { display: none; font-size: 30px; font-weight: 900; color: #E8873A; animation: pulse 1s ease-in-out infinite; }
@@ -77,14 +77,14 @@
   #rlist { font-size: 22px; } #rlist table { border-collapse: collapse; } #rlist td, #rlist th { padding: 6px 14px; text-align: center; border-bottom: 1px solid #D9CBA3; }
   #rlist .bests { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 12px; font-size: 19px; font-weight: 700; justify-content: center; }
   #courses .fhead { color: #fff; text-shadow: 0 3px 0 #2E2A1E; }
-  #clist { display: flex; flex-direction: column; gap: 22px; }
-  .course { background: #F3EBD3; border: 5px solid #2E2A1E; border-radius: 26px; padding: 14px 20px 18px; box-shadow: 0 10px 0 #8A7A50; }
-  .chead { font-size: 34px; font-weight: 900; margin: 0 0 10px 6px; }
+  #clist { display: flex; flex-direction: column; gap: 14px; }
+  .course { background: #F3EBD3; border: 5px solid #2E2A1E; border-radius: 26px; padding: 8px 18px 14px; box-shadow: 0 10px 0 #8A7A50; }
+  .chead { font-size: 28px; font-weight: 900; margin: 0 0 6px 6px; }
   .lrow { display: flex; gap: 18px; }
-  .lvl { width: 230px; height: 150px; border-radius: 20px; border: 4px solid #2E2A1E; background: #F7F1DE; box-shadow: 0 7px 0 #8A7A50; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+  .lvl { width: 230px; height: 116px; border-radius: 20px; border: 4px solid #2E2A1E; background: #F7F1DE; box-shadow: 0 7px 0 #8A7A50; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
   .lvl:active { transform: translateY(5px); box-shadow: 0 2px 0 #8A7A50; }
   .lvl .ln { position: absolute; top: 8px; left: 12px; width: 36px; height: 36px; border-radius: 50%; background: #E8873A; color: #fff; font-weight: 900; font-size: 22px; display: flex; align-items: center; justify-content: center; border: 3px solid #2E2A1E; }
-  .lvl .le { font-size: 54px; line-height: 1; }
+  .lvl .le { font-size: 44px; line-height: 1; }
   .lvl .lt { font-size: 21px; font-weight: 800; }
   .lvl .lb { position: absolute; top: 10px; right: 12px; font-size: 20px; font-weight: 800; }
   #cBack { position: fixed; top: calc(16px + env(safe-area-inset-top)); left: calc(16px + env(safe-area-inset-left)); }
@@ -108,7 +108,19 @@
   #parent .tip { font-size: 16px; color: #5E5236; margin: 4px 0; line-height: 1.35; }
   #parent .pbtns { display: flex; gap: 12px; justify-content: space-between; margin-top: 6px; }
   #parent .pbtns button { padding: 14px 22px; border-radius: 14px; background: #D9CBA3; font-size: 21px; font-weight: 700; }
-  #parent .pbtns .ok { background: #9DBB5A; }
+  #parent .pbtns .ok, #voice .pbtns .ok { background: #9DBB5A; }
+  .iwx { font-size: 30px; font-weight: 800; color: #5E5236; }
+  #voice { background: rgba(20,18,10,.6); }
+  #voice .card { align-items: stretch; width: min(760px, 94vw); max-height: 92vh; overflow-y: auto; touch-action: pan-y; font-size: 20px; gap: 8px; text-align: left; }
+  #voice h2 { margin: 0 0 4px; font-size: 28px; }
+  #voice .tip { font-size: 16px; color: #5E5236; margin: 4px 0; line-height: 1.35; }
+  #voice .pbtns { display: flex; justify-content: space-between; margin-top: 6px; }
+  #voice .pbtns button { padding: 14px 26px; border-radius: 14px; font-size: 21px; font-weight: 700; }
+  .vrow { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid #D9CBA3; }
+  .vrow .vt { flex: 1; display: flex; flex-direction: column; } .vrow .vt i { font-size: 15px; color: #7a6c4a; }
+  .vrow button { padding: 10px 14px; border-radius: 12px; background: #D9CBA3; font-size: 19px; font-weight: 800; min-width: 54px; }
+  .vrow button:disabled { opacity: .35; } .vrow .vrec { background: #E8873A; color: #fff; min-width: 120px; }
+  .vrow.rec .vrec { background: #C0392B; animation: pulse 1s infinite; } .vrow.has { background: rgba(157,187,90,.12); }
   #rotate { position: fixed; inset: 0; z-index: 30; background: #2E2A1E; color: #fff; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 30px; font-size: 34px; font-weight: 800; }
   #rotate.on { display: flex; }
   #rotate .ipad { width: 110px; height: 150px; border: 10px solid #fff; border-radius: 22px; animation: turn 2s ease-in-out infinite; }
@@ -138,7 +150,7 @@
 </div>
 
 <div id="intro" class="screen">
-  <div class="card"><div class="bigemoji" id="iEmoji">🌿</div><div class="lname" id="iName">Fern Valley</div><div class="dots" id="iDots"></div></div>
+  <div class="card"><div class="bigemoji" id="iEmoji">🌿</div><div class="lname" id="iName">Fern Valley</div><div class="iwx" id="iWx"></div><div class="dots" id="iDots"></div></div>
 </div>
 
 <div id="pause" class="screen dim">
@@ -197,6 +209,16 @@
   <div id="fgrid"></div>
 </div>
 
+<div id="voice" class="screen">
+  <div class="card">
+    <h2>🎙 Ranger lines in your voice</h2>
+    <p class="tip">Tap <b>● Record</b>, say the line (the example, or anything you like), then <b>■ Stop</b>. Your recording plays instead of the computer voice at that moment in the game. Recordings stay on this iPad only. Leave a line empty to keep the computer voice.</p>
+    <div id="vlist"></div>
+    <p class="tip" id="vMsg"></p>
+    <div class="pbtns"><span></span><button id="vDone" class="ok">Done</button></div>
+  </div>
+</div>
+
 <div id="parent" class="screen">
   <div class="card">
     <h2>Grown-ups</h2>
@@ -204,10 +226,13 @@
     <label>Blood splash on hits <input type="checkbox" id="pBlood"></label>
     <label>Difficulty <select id="pDiff"><option value="easy">Easy (age 3–5)</option><option value="normal">Normal (age 5+)</option></select></label>
     <label>Jeep energy &amp; game over (bites drain the bar) <input type="checkbox" id="pEnergy"></label>
-    <label>Weather <select id="pWeather"><option value="random">Changes during the ride</option><option value="clear">Always sunny</option><option value="rain">Rain</option><option value="fog">Fog</option><option value="storm">Thunderstorm</option></select></label>
+    <label>Weather <select id="pWeather"><option value="random">Random every ride (can change on the way)</option><option value="clear">Always sunny</option><option value="rain">Rain</option><option value="fog">Fog</option><option value="storm">Thunderstorm</option></select></label>
     <label>Sound effects <input type="checkbox" id="pSound"></label>
     <label>Music <input type="checkbox" id="pMusic"></label>
     <label>Spoken ranger radio <input type="checkbox" id="pVoice"></label>
+    <label>Radio voice <span style="display:flex;gap:8px;align-items:center"><select id="pVoiceName" style="max-width:300px"></select><button id="pVoiceTest" type="button" style="padding:6px 12px;border-radius:10px;background:#D9CBA3;font-weight:700">Test</button></span></label>
+    <p class="tip"><b>Most natural voice on iPad:</b> Settings &rarr; Accessibility &rarr; Read &amp; Speak (or Spoken Content) &rarr; Voices &rarr; English &rarr; download a <b>Premium</b> or <b>Enhanced</b> voice (e.g. Ava, Zoe, Evan, Nathan). Then reopen the game and pick it here (Auto picks the best one).</p>
+    <label>Your own voice for the ranger <button id="pRecord" type="button" style="padding:8px 14px;border-radius:12px;background:#E8873A;color:#fff;font-weight:800">🎙 Record lines</button></label>
     <label>Missions per day <select id="pRides"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="0">No limit</option></select></label>
     <label>Child's name (spoken only) <input type="text" id="pName" maxlength="20" autocomplete="off"></label>
     <p class="tip" id="pStat"></p>

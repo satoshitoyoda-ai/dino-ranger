@@ -134,16 +134,117 @@ export function musicStart() { if (!AC || !S.music || mus.on) return; mus.on = t
 export function musicStop() { if (!mus.on) return; mus.on = false; clearInterval(mus.iv); if (AC) musG.gain.setTargetAtTime(0.0001, AC.currentTime, 0.15); }
 
 // ranger radio (device voice)
+// Picks the most natural voice the device has (Premium / Enhanced / neural voices first, never the novelty voices)
+// and speaks sentence by sentence with varied pitch and pace so it sounds less flat.
+const NOVELTY = /Albert|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Good News|Jester|Organ|Superstar|Trinoids|Whisper|Wobble|Zarvox|Fred|Junior|Ralph|Kathy|Grandma|Grandpa|Rocko|Shelley|Flo|Eddy|Reed|Sandy/i;
 let voiceCache = null;
+export function englishVoices() {
+  const vs = (window.speechSynthesis && speechSynthesis.getVoices()) || [];
+  return vs.filter(v => /^en/i.test(v.lang) && !NOVELTY.test(v.name)).sort((a, b) => voiceScore(b) - voiceScore(a));
+}
+function voiceScore(v) {
+  let sc = 0; const n = v.name;
+  if (/premium/i.test(n)) sc += 100; if (/enhanced|neural|natural|online/i.test(n)) sc += 80;
+  if (/Ava|Zoe|Evan|Nathan|Samantha|Allison|Susan|Joelle|Noelle|Tom|Aaron|Nicky|Siri/i.test(n)) sc += 40;
+  if (/Google US English/i.test(n)) sc += 35; if (/Microsoft (Aria|Jenny|Guy|Ana)/i.test(n)) sc += 45;
+  if (/en[-_]US/i.test(v.lang)) sc += 10; if (/en[-_](GB|AU)/i.test(v.lang)) sc += 5;
+  if (v.localService) sc += 3;   // works offline
+  return sc;
+}
 function pickVoice() {
   if (voiceCache) return voiceCache;
-  const vs = (window.speechSynthesis && speechSynthesis.getVoices()) || [];
-  voiceCache = vs.find(v => /en[-_]US/i.test(v.lang) && /Samantha|Ava|Allison|Susan|Alex|Daniel/i.test(v.name)) || vs.find(v => /en[-_]US/i.test(v.lang)) || vs.find(v => /^en/i.test(v.lang)) || null;
+  const list = englishVoices();
+  voiceCache = (S.voiceName && list.find(v => v.name === S.voiceName)) || list[0] || null;
   return voiceCache;
 }
+export function resetVoice() { voiceCache = null; }
 if (window.speechSynthesis) speechSynthesis.onvoiceschanged = () => { voiceCache = null; };
-export function say(text, interrupt = true) {
-  if (!S.voice || !window.speechSynthesis || !window.SpeechSynthesisUtterance) return;
-  try { if (!interrupt && speechSynthesis.speaking) return; if (interrupt) speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text); u.lang = 'en-US'; u.rate = 1.0; u.pitch = 1.0; const v = pickVoice(); if (v) u.voice = v; speechSynthesis.speak(u); } catch (e) {}
+// mood: 'alert' (warnings, boss), 'cheer' (praise), 'calm' (mission intro), default = radio chatter
+const MOOD = { alert: [1.06, 1.08], cheer: [1.04, 1.16], calm: [0.94, 1.0], radio: [1.0, 1.04] };
+export function say(text, interrupt = true, mood = 'radio', key = null) {
+  if (!S.voice) return;
+  // a grown-up's recording for this moment beats the computer voice
+  if (key && REC[key] && AC) { const tts = window.speechSynthesis; if (!interrupt && (recSrc || (tts && tts.speaking))) return; if (tts) tts.cancel(); playRec(key).then(ok => { if (!ok) speak(text, mood); }).catch(() => speak(text, mood)); return; }
+  if (!interrupt && (recSrc || (window.speechSynthesis && speechSynthesis.speaking))) return;
+  if (interrupt) stopRec();
+  speak(text, mood, interrupt);
 }
+function speak(text, mood = 'radio', interrupt = true) {
+  if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) return;
+  try {
+    if (interrupt) speechSynthesis.cancel();
+    const v = pickVoice(), [rate0, pitch0] = MOOD[mood] || MOOD.radio;
+    const parts = String(text).match(/[^.!?]+[.!?]*/g) || [text];
+    parts.forEach((p, i) => {
+      const t = p.trim(); if (!t) return;
+      const excl = /!$/.test(t), ques = /\?$/.test(t), short = t.split(' ').length <= 3;
+      const u = new SpeechSynthesisUtterance(t); u.lang = v ? v.lang : 'en-US'; if (v) u.voice = v;
+      // varied delivery: shouts quicker and higher, short calls punchier, later sentences settle a little
+      u.rate = Math.min(1.25, rate0 * (excl ? 1.06 : 1) * (short ? 1.05 : 1) * (1 - i * 0.015) * (0.97 + Math.random() * 0.06));
+      u.pitch = Math.min(1.4, pitch0 * (excl ? 1.08 : ques ? 1.05 : 0.98) * (0.96 + Math.random() * 0.08));
+      u.volume = 1;
+      speechSynthesis.speak(u);
+    });
+  } catch (e) {}
+}
+
+// ---------- recorded ranger lines: a grown-up's own voice, kept on this device (IndexedDB) ----------
+export const LINES = [
+  ['start', 'Mission start', 'Here we go, ranger! Dinosaurs ahead!'],
+  ['boss', 'Big boss appears', 'Here comes the big one! Fire, fire, fire!'],
+  ['angry', 'Boss gets angry', "It's getting angry! Keep firing!"],
+  ['down', 'Boss beaten', 'Great shot, ranger! You did it!'],
+  ['hurt', 'Jeep gets bitten', 'Ouch! Hang on tight!'],
+  ['weather', 'Weather changes', 'Look at the weather! Watch closely!'],
+  ['complete', 'Course complete', 'Mission complete! Great job, ranger!'],
+  ['over', 'Out of energy', "Oh no! Let's try again!"],
+  ['pick', 'Course picker', 'Pick a course, ranger!'],
+  ['sleep', 'No missions left today', 'The dinosaurs are sleeping. See you tomorrow!'],
+];
+const REC = {};
+let dbP = null;
+function idb() { return dbP || (dbP = new Promise((res, rej) => { const r = indexedDB.open('dino-ranger-voice', 1); r.onupgradeneeded = () => r.result.createObjectStore('lines'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); })); }
+async function store(mode, fn) { const d = await idb(); return new Promise((res, rej) => { const t = d.transaction('lines', mode); fn(t.objectStore('lines')); t.oncomplete = () => res(); t.onerror = () => rej(t.error); }); }
+export async function loadRecordings() {
+  try { const d = await idb(); await new Promise(res => { const c = d.transaction('lines', 'readonly').objectStore('lines').openCursor(); c.onsuccess = () => { const cur = c.result; if (cur) { REC[cur.key] = { blob: cur.value }; cur.continue(); } else res(); }; c.onerror = () => res(); }); } catch (e) {}
+  return REC;
+}
+export function hasRec(k) { return !!REC[k]; }
+export async function saveRec(k, blob) { REC[k] = { blob }; try { await store('readwrite', s => s.put(blob, k)); } catch (e) {} }
+export async function delRec(k) { delete REC[k]; try { await store('readwrite', s => s.delete(k)); } catch (e) {} }
+let recSrc = null;
+async function recBuf(k) {
+  const r = REC[k]; if (!r || !AC) return null;
+  if (!r.buf) {
+    const ab = await r.blob.arrayBuffer(); r.buf = await new Promise((res, rej) => AC.decodeAudioData(ab, res, rej));
+    // trim the silence before and after the words
+    const a = r.buf.getChannelData(0), sr = r.buf.sampleRate; let i0 = 0, i1 = a.length - 1;
+    while (i0 < a.length && Math.abs(a[i0]) < 0.03) i0++; while (i1 > i0 && Math.abs(a[i1]) < 0.03) i1--;
+    r.off = Math.max(0, i0 / sr - 0.06); r.dur = Math.max(0.2, Math.min(r.buf.duration - r.off, (i1 - i0) / sr + 0.2));
+  }
+  return r;
+}
+export function recBusy() { return !!recSrc; }
+export function stopRec() { if (recSrc) { try { recSrc.stop(); } catch (e) {} recSrc = null; } }
+export async function playRec(k) {
+  if (!AC) audioInit(); if (!AC) return false;
+  const r = await recBuf(k); if (!r) return false;
+  stopRec(); const src = AC.createBufferSource(), g = AC.createGain(); g.gain.value = 1.5; src.buffer = r.buf; src.connect(g); g.connect(master);
+  src.onended = () => { if (recSrc === src) recSrc = null; }; recSrc = src; src.start(0, r.off, r.dur); return true;
+}
+let mr = null, chunks = [], micStream = null;
+export async function startRecording() {
+  micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+  const mt = ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm', 'audio/ogg'].find(t => window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t));
+  mr = new MediaRecorder(micStream, mt ? { mimeType: mt } : undefined); chunks = [];
+  mr.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); }; mr.start();
+}
+export function stopRecording() {
+  return new Promise(res => {
+    if (!mr) return res(null);
+    const m = mr; mr = null;
+    m.onstop = () => { const b = new Blob(chunks, { type: m.mimeType || 'audio/mp4' }); if (micStream) micStream.getTracks().forEach(t => t.stop()); micStream = null; res(b.size ? b : null); };
+    m.stop();
+  });
+}
+export function recording() { return !!mr; }
