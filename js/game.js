@@ -9,7 +9,7 @@ import { FX } from './fx.js';
 import { Convoy } from './convoy.js';
 import { audioBind, audioInit, sfx, cry, say, musicStart, musicStop, audioTick, ambOff, AC, setRain, englishVoices, resetVoice, LINES, loadRecordings, hasRec, isMine, saveRec, delRec, playRec, stopRec, startRecording, stopRecording, recording } from './audio.js';
 
-export const VERSION = '3.19.1';
+export const VERSION = '3.20.0';
 
 /* ================= settings (this device only) ================= */
 const SKEY = 'dinoRanger.v1';
@@ -21,8 +21,8 @@ function todayStr() { const d = new Date(); return d.getFullYear() + '-' + (d.ge
 function ridesToday() { if (S.today !== todayStr()) { S.today = todayStr(); S.rides = 0; save(); } return S.rides; }
 // assist = screen-pixel ring searched around a missed tap (Easy only); Normal is exact.
 const DIFF = {
-  easy:   { assist: 34, interval: 2.3, max: 3, speedMul: 0.75, hpIdx: 0 },
-  normal: { assist: 0, interval: 1.5, max: 5, speedMul: 1.0, hpIdx: 1 },
+  easy:   { assist: 34, interval: 1.7, max: 5, speedMul: 0.75, hpIdx: 0 },
+  normal: { assist: 0, interval: 1.1, max: 8, speedMul: 1.0, hpIdx: 1 },
 };
 const D = () => DIFF[S.diff] || DIFF.easy;
 const ACT = () => S.intensity !== 'gentle';
@@ -31,28 +31,29 @@ const BLOOD = () => S.blood !== false;
 /* ================= missions ================= */
 const LEVELS = [
   { name: 'Fern Valley', emoji: '🌿', say: 'Ranger, this is Fern Valley. Dinosaurs ahead! Tap to fire the darts!',
-    boss: 'bigTrike', bossSize: 1.9, bossHp: [25, 40], bossRoll: 0, bossSay: 'Whoa! A giant Triceratops! Keep firing!', kinds: { raptor: 3, trike: 1.2 }, root: 45, herd: true },
+    boss: 'bigTrike', bossSize: 1.9, bossHp: [25, 40], bossRoll: 0, bossSay: 'Whoa! A giant Triceratops! Keep firing!', kinds: { raptor: 3, trike: 1.2, compy: 1.5, para: 1.2 }, root: 45, herd: true },
   { name: 'River Gorge', emoji: '🏞️', say: 'River Gorge! Watch the sky for Pteranodons!',
-    boss: 'spino', bossSize: 1, bossHp: [30, 45], bossRoll: 0, bossSay: 'A huge Spinosaurus by the river! Fire, fire, fire!', kinds: { raptor: 2, ptera: 2, stego: 1.2 }, root: 43 },
+    boss: 'spino', bossSize: 1, bossHp: [30, 45], bossRoll: 0, bossSay: 'A huge Spinosaurus by the river! Fire, fire, fire!', kinds: { raptor: 2, ptera: 2, stego: 1.2, para: 1, dilo: 1 }, root: 43 },
   { name: 'Volcano Ridge', emoji: '🌋', say: 'Volcano Ridge. Last mission, ranger! Stay sharp!',
-    boss: 'rex', bossSize: 1, bossHp: [35, 55], bossRoll: 1.8, bossSay: "It's the T. rex! Fire the darts!", kinds: { raptor: 3, ptera: 1, stego: 1, trike: 1 }, root: 40 },
+    boss: 'rex', bossSize: 1, bossHp: [35, 55], bossRoll: 1.8, bossSay: "It's the T. rex! Fire the darts!", kinds: { raptor: 3, ptera: 1, stego: 1, trike: 1, carno: 1, anky: 1 }, root: 40 },
   { name: 'Misty Marsh', emoji: '🐸', say: 'Misty Marsh, ranger. Stay on the causeway, and watch the water!',
-    boss: 'bigStego', bossSize: 1.7, bossHp: [30, 45], bossRoll: 0, bossSay: 'A giant Stegosaurus! Look at those spikes! Fire!', kinds: { raptor: 2, stego: 1.5, ptera: 1.5 }, root: 42 },
+    boss: 'bigStego', bossSize: 1.7, bossHp: [30, 45], bossRoll: 0, bossSay: 'A giant Stegosaurus! Look at those spikes! Fire!', kinds: { raptor: 2, stego: 1.5, ptera: 1.5, dilo: 1.4, compy: 1 }, root: 42 },
   { name: 'Red Canyon', emoji: '🏜️', say: 'Red Canyon. Raptors love the rocks here. Eyes open!',
-    boss: 'alphaRaptor', bossSize: 2.6, bossHp: [30, 45], bossRoll: 0, bossSay: "That's the Alpha Raptor! It's fast. Keep firing!", kinds: { raptor: 4, trike: 1, ptera: 0.7 }, root: 44 },
+    boss: 'alphaRaptor', bossSize: 2.6, bossHp: [30, 45], bossRoll: 0, bossSay: "That's the Alpha Raptor! It's fast. Keep firing!", kinds: { raptor: 4, trike: 1, ptera: 0.7, pachy: 1.4, carno: 0.8 }, root: 44 },
   { name: 'Sunset Plains', emoji: '🌅', say: 'Sunset Plains. Giant herds all around. Final mission, ranger!',
-    boss: 'kingRex', bossSize: 1.3, bossHp: [40, 60], bossRoll: 1.8, bossSay: "It's the King Rex! The biggest one of all!", kinds: { raptor: 2, trike: 1.5, stego: 1, ptera: 1 }, root: 41, herd: true },
+    boss: 'kingRex', bossSize: 1.3, bossHp: [40, 60], bossRoll: 1.8, bossSay: "It's the King Rex! The biggest one of all!", kinds: { raptor: 2, trike: 1.5, stego: 1, ptera: 1, para: 1.6, anky: 1, quetzal: 0.6 }, root: 41, herd: true },
   { name: 'Moonlight Jungle', emoji: '🌙', say: 'Moonlight Jungle. It is dark out here, ranger. Look for the shining eyes!',
-    boss: 'shadowRex', bossSize: 1.1, bossHp: [35, 50], bossRoll: 1.8, bossSay: "It's the Shadow Rex! It hides in the dark. Fire!", kinds: { raptor: 3.5, trike: 1, ptera: 0.6 }, root: 43 },
+    boss: 'shadowRex', bossSize: 1.1, bossHp: [35, 50], bossRoll: 1.8, bossSay: "It's the Shadow Rex! It hides in the dark. Fire!", kinds: { raptor: 3.5, trike: 1, ptera: 0.6, dilo: 1.4, compy: 1.4, carno: 0.6 }, root: 43 },
   { name: 'Lagoon Shore', emoji: '🏝️', say: 'Lagoon Shore! Sunny beach, blue water. Watch the palm trees!',
-    boss: 'bigSpino', bossSize: 1.35, bossHp: [35, 50], bossRoll: 0, bossSay: 'A giant Spinosaurus out of the lagoon! Fire, fire, fire!', kinds: { raptor: 2, ptera: 2.2, stego: 1, trike: 0.8 }, root: 45 },
+    boss: 'bigSpino', bossSize: 1.35, bossHp: [35, 50], bossRoll: 0, bossSay: 'A giant Spinosaurus out of the lagoon! Fire, fire, fire!', kinds: { raptor: 2, ptera: 2.2, stego: 1, trike: 0.8, quetzal: 1, para: 1.2, compy: 1 }, root: 45 },
   { name: 'Frozen Peaks', emoji: '❄️', say: 'Frozen Peaks. Brrr, it is snowy! Final mission, ranger!',
-    boss: 'frostTrike', bossSize: 2.3, bossHp: [40, 60], bossRoll: 0, bossSay: "The giant Frost Horn! It's the strongest one. Keep firing!", kinds: { raptor: 2.5, trike: 1.6, stego: 1 }, root: 40, herd: true },
+    boss: 'frostTrike', bossSize: 2.3, bossHp: [40, 60], bossRoll: 0, bossSay: "The giant Frost Horn! It's the strongest one. Keep firing!", kinds: { raptor: 2.5, trike: 1.6, stego: 1, anky: 1.4, pachy: 1, carno: 0.8 }, root: 40, herd: true },
 ];
 const SET = 3;   // each course has 3 levels; a ride plays from the chosen level to the end of its course
 const COURSES = [{ name: 'Jungle Trail', emoji: '🌴', first: 0 }, { name: 'Wild Lands', emoji: '🗺️', first: 3 }, { name: 'Far Frontier', emoji: '🧭', first: 6 }];
 const TEETH = ['rex', 'spino', 'kingRex', 'alphaRaptor', 'shadowRex', 'bigSpino'];
-const GUIDE = ['raptor', 'trike', 'stego', 'ptera', 'spino', 'rex'];
+const GUIDE = ['raptor', 'compy', 'dilo', 'pachy', 'carno', 'para', 'trike', 'stego', 'anky', 'ptera', 'quetzal', 'spino', 'rex'];
+const HUNTERS = ['raptor', 'compy', 'dilo', 'carno'];
 const RIDE = 6.5;
 audioBind(S, ACT, () => (LEVELS[G ? G.level : 0] || LEVELS[0]).root);
 
@@ -124,16 +125,19 @@ function settle(d) {
 function speciesHp(kind) { const sp = SPECIES[kind]; let hp = sp.hp; if (S.diff === 'easy') hp = Math.min(hp, 2); return hp; }
 
 function spawnDino(o = {}) {
-  const lv = L(), kind = o.kind || weighted(lv.kinds), sp = SPECIES[kind];
-  const pairs = o.count || (kind === 'raptor' && Math.random() < 0.25 ? 2 : 1);
+  const lv = L(); let kind = o.kind || weighted(lv.kinds);
+  // built-in rigs cost more to draw than the model pack: keep at most 3 on screen, the rest are raptors
+  if (!SPECIES[kind].base && !['raptor', 'trike', 'stego', 'ptera', 'quetzal'].includes(kind) && G.dinos.filter(d => !d.gl && d.sp.type !== 'flyer' && d.mode !== 'dead').length >= 3) { kind = 'raptor'; o = Object.assign({}, o, { count: undefined }); }
+  const sp = SPECIES[kind];
+  const pairs = o.count || (kind === 'compy' ? (S.diff === 'easy' ? 3 : 3 + Math.floor(Math.random() * 3)) : kind === 'raptor' && Math.random() < 0.25 ? 2 : 1);
   let side = o.side || (Math.random() < 0.5 ? -1 : 1); if (world.env.river && sp.type !== 'flyer') side = 1;
   const swamp = world.env.swamp && sp.type !== 'flyer';
-  const roleR = Math.random(), role = o.role && !swamp && sp.type !== 'flyer' ? o.role : swamp ? 'charge' : sp.type === 'flyer' ? 'swoop' : (kind === 'stego' ? (roleR < 0.25 ? 'charge' : 'cross') : kind === 'raptor' ? (roleR < 0.6 ? 'charge' : 'cross') : (roleR < 0.5 ? 'charge' : 'cross'));
+  const roleR = Math.random(), role = o.role && !swamp && sp.type !== 'flyer' ? o.role : swamp ? 'charge' : sp.type === 'flyer' ? 'swoop' : (kind === 'stego' || kind === 'anky' ? (roleR < 0.25 ? 'charge' : 'cross') : kind === 'raptor' || kind === 'compy' ? (roleR < 0.6 ? 'charge' : 'cross') : (roleR < 0.5 ? 'charge' : 'cross'));
   // ambush: burst out of the trees right beside the road, close in front (Action mode, ground dinosaurs)
   const ambush = o.ambush != null ? o.ambush && ACT() && sp.type !== 'flyer' && !swamp : ACT() && sp.type !== 'flyer' && !swamp && Math.random() < 0.4;
   const ahead = (ambush ? rnd(12, 20) : rnd(26, 40)) + (o.ahead || 0);
   for (let i = 0; i < pairs; i++) {
-    const d = mkDino(kind, kind === 'raptor' ? rnd(1.3, 1.6) : rnd(0.9, 1.15), Math.random() < 0.5 ? 0 : 1);
+    const d = mkDino(kind, sp.sizeR ? rnd(sp.sizeR[0], sp.sizeR[1]) : kind === 'raptor' ? rnd(1.3, 1.6) : rnd(0.9, 1.15), Math.floor(Math.random() * 3));
     const s = G.s + ahead + i * (o.gap || 3), base = world.posAt(s), F = world.dirAt(s), R = tmp.crossVectors(F, UP).normalize();
     const lat = swamp ? rnd(-2, 2) + i * 2.5 : side * (sp.type === 'flyer' ? rnd(-10, 10) : ambush ? rnd(8, 10.5) : rnd(7, 18)) + i * side * 2;
     d.pos.copy(base).addScaledVector(R, lat); d.pos.y = groundAt(d.pos);
@@ -155,13 +159,14 @@ function spawnDino(o = {}) {
 // spawn director: irregular timing and group sizes (singles, pairs, raptor packs, mixed groups, herd crossings, lulls)
 function spawnWave() {
   const lv = L(), kinds = Object.keys(lv.kinds), r = Math.random(), side = Math.random() < 0.5 ? -1 : 1;
-  const ground = kinds.filter(k => SPECIES[k].type !== 'flyer'), plant = ground.filter(k => k !== 'raptor');
+  const ground = kinds.filter(k => SPECIES[k].type !== 'flyer'), plant = ground.filter(k => !HUNTERS.includes(k));
   let wait = D().interval * (0.45 + Math.random() * 1.3);                    // uneven gaps
-  if (r < 0.42) spawnDino();                                                   // single
-  else if (r < 0.6) { spawnDino({ side }); if (Math.random() < 0.6) spawnDino({ side: -side, ahead: rnd(2, 8) }); }   // pair, often both sides
-  else if (r < 0.74 && ground.includes('raptor')) { const n = S.diff === 'easy' ? 3 : 2 + Math.floor(Math.random() * 3); spawnDino({ kind: 'raptor', count: n, side, gap: 2.2, ambush: Math.random() < 0.6 }); wait += D().interval * 0.8; }   // raptor pack
-  else if (r < 0.84 && plant.length) { const k = pick(plant); spawnDino({ kind: k, count: 2 + (Math.random() < 0.4 ? 1 : 0), side, gap: 5, role: 'cross', ambush: false }); wait += D().interval; }   // herd crossing
-  else if (r < 0.93 && plant.length && ground.includes('raptor')) { spawnDino({ kind: pick(plant), side, role: 'charge' }); spawnDino({ kind: 'raptor', count: 2, side, ahead: -4, gap: 2 }); wait += D().interval * 0.6; }   // mixed group
+  if (r < 0.3) spawnDino();                                                   // single
+  else if (r < 0.52) { spawnDino({ side }); if (Math.random() < 0.6) spawnDino({ side: -side, ahead: rnd(2, 8) }); }   // pair, often both sides
+  else if (r < 0.7 && ground.includes('compy') && Math.random() < 0.4) { spawnDino({ kind: 'compy', side, gap: 1.6, ambush: Math.random() < 0.6 }); wait += D().interval * 0.5; }   // swarm of little ones
+  else if (r < 0.7 && ground.includes('raptor')) { const n = S.diff === 'easy' ? 3 : 2 + Math.floor(Math.random() * 3); spawnDino({ kind: 'raptor', count: n, side, gap: 2.2, ambush: Math.random() < 0.6 }); wait += D().interval * 0.8; }   // raptor pack
+  else if (r < 0.83 && plant.length) { const k = pick(plant); spawnDino({ kind: k, count: 2 + (Math.random() < 0.4 ? 1 : 0), side, gap: 5, role: 'cross', ambush: false }); wait += D().interval; }   // herd crossing
+  else if (r < 0.96 && plant.length && ground.includes('raptor')) { spawnDino({ kind: pick(plant), side, role: 'charge' }); spawnDino({ kind: 'raptor', count: 2, side, ahead: -4, gap: 2 }); wait += D().interval * 0.6; }   // mixed group
   else wait = D().interval * rnd(2.2, 3.5);                                   // lull: nothing for a while
   G.spawnT = wait;
 }
@@ -285,7 +290,7 @@ function killDino(d, wp, head) {
   if (!BLOOD()) setTimeout(() => sfx.sleepy(false), 500);
   star(wp, d.hpMax + (head ? 1 : 0)); meet(d.kind);
 }
-function meet(kind) { const k = SPECIES[kind].base || kind; S.seen[k] = (S.seen[k] || 0) + 1; save(); }
+function meet(kind) { const k = GUIDE.includes(kind) ? kind : SPECIES[kind].base || kind; S.seen[k] = (S.seen[k] || 0) + 1; save(); }
 
 /* ================= AI ================= */
 function turnTo(d, tx, tz, rate, dt) { rate /= Math.sqrt(Math.max(1, d.mass || 1)); const want = Math.atan2(tx - d.pos.x, tz - d.pos.z); let df = want - d.heading; while (df > Math.PI) df -= Math.PI * 2; while (df < -Math.PI) df += Math.PI * 2; d.heading += clamp(df, -rate * dt, rate * dt); return Math.abs(df); }
@@ -293,7 +298,7 @@ function stepFwd(d, sp, dt) { d.speed += (sp - d.speed) * Math.min(1, dt * 5 / (
 function biteHit(d, big) {
   if (!ACT()) return;
   ouch(big || d.boss);
-  hurt(d.boss ? (S.diff === 'easy' ? 7 : 10) : big ? (S.diff === 'easy' ? 10 : 15) : (S.diff === 'easy' ? 9 : 15));
+  hurt(d.boss ? (S.diff === 'easy' ? 7 : 10) : big ? (S.diff === 'easy' ? 8 : 13) : (S.diff === 'easy' ? 7 : 12));
   const side = Math.sign(jeepR.dot(tmp.copy(d.pos).sub(jeepPos))) || 1;
   G.shake = Math.max(G.shake, big ? 0.75 : 0.5); G.flash = 0.35; G.red = BLOOD() ? 0.35 : 0;
   G.bumpV.addScaledVector(jeepR, -side * (big ? 0.9 : 0.6)).addScaledVector(UP, big ? 0.6 : 0.35);
@@ -738,7 +743,7 @@ portraitRT.texture.colorSpace = THREE.SRGBColorSpace;
 function portrait(cvs, kind, seen) {
   const ps = new THREE.Scene(); ps.background = new THREE.Color(0xf7f1de); ps.environment = scene.environment;
   ps.add(new THREE.HemisphereLight(0xffffff, 0x8a7a50, 1.6)); const dl = new THREE.DirectionalLight(0xfff2dc, 2.6); dl.position.set(3, 5, 4); ps.add(dl);
-  const d = new Dino(kind, { size: 1 }); d.heading = -Math.PI / 2 + 0.45; d.anim = 'idle'; d.jaw = kind === 'rex' || kind === 'spino' ? 0.6 : 0.1; d.t = 1; d.update(0.016);
+  const d = new Dino(kind, { size: 1 }); d.heading = -Math.PI / 2 + 0.45; d.anim = 'idle'; d.jaw = kind === 'rex' || kind === 'spino' || kind === 'carno' ? 0.6 : 0.1; d.t = 1; d.update(0.016);
   if (d.sp.type === 'flyer') { d.ph = 0.4; d.anim = 'glide'; d.update(0.016); }
   ps.add(d.root); d.root.updateWorldMatrix(true, true);
   const box = new THREE.Box3().setFromObject(d.root), c = box.getCenter(new THREE.Vector3()), sz = box.getSize(new THREE.Vector3());

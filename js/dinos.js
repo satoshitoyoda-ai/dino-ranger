@@ -34,8 +34,37 @@ SPECIES.shadowRex = Object.assign({}, SPECIES.rex, { base: 'rex', hp: 14, cry: '
 SPECIES.bigSpino = Object.assign({}, SPECIES.spino, { base: 'spino', hp: 14, cry: 'roar' });
 SPECIES.frostTrike = Object.assign({}, SPECIES.trike, { base: 'trike', hp: 12, cry: 'bellowBig', tint: 0x8fb8e6, tintK: 0.5 });
 
+// more species: built-in rigs with their own silhouettes (crests, horns, domes, armour)
+Object.assign(SPECIES, {
+  carno: { name: 'Carnotaurus', type: 'thero', hip: 1.7, bulk: 0.58, back: 1.6, neck: 0.6, head: 0.95, tail: 3.6, arm: 0.16, headType: 'carno', speed: [4.5, 8.5], hp: 5, cry: 'bellow',
+    pal: [{ dark: '#5a1f18', base: '#a8493a', belly: '#e2c7a0', stripe: '#3a120e' }] },
+  dilo: { name: 'Dilophosaurus', type: 'thero', hip: 1.15, bulk: 0.36, back: 1.15, neck: 0.75, head: 0.6, tail: 2.6, arm: 0.5, headType: 'dilo', speed: [4, 7.5], hp: 2, cry: 'screech',
+    pal: [{ dark: '#3d4a18', base: '#a3a83c', belly: '#ece4b0', stripe: '#232c0c', crest: '#d9542b' }, { dark: '#1f3f4f', base: '#4f8fa8', belly: '#e0e4c8', stripe: '#122a36', crest: '#e8a02c' }] },
+  pachy: { name: 'Pachycephalosaurus', type: 'thero', hip: 1.25, bulk: 0.44, back: 0.95, neck: 0.55, head: 0.62, tail: 2.1, arm: 0.36, headType: 'pachy', speed: [4.2, 7.8], hp: 2, cry: 'bellow',
+    pal: [{ dark: '#3f3350', base: '#7a6a8f', belly: '#d8cfc0', stripe: '#2c2338', crest: '#c9a877' }] },
+  para: { name: 'Parasaurolophus', type: 'quad', legF: 1.1, legR: 1.9, bulk: 0.72, body: 2.9, neck: 1.05, neckUp: 0.6, head: 0.62, tail: 3.0, headType: 'para', speed: [2.2, 4.6], hp: 2, cry: 'hoot',
+    pal: [{ dark: '#20494a', base: '#4f9088', belly: '#dcd9b4', stripe: '#173536', crest: '#e0762f' }, { dark: '#4c3a20', base: '#b08a4a', belly: '#ece0ba', stripe: '#33260f', crest: '#c8402c' }] },
+  anky: { name: 'Ankylosaurus', type: 'quad', legF: 0.8, legR: 0.95, bulk: 1.02, body: 3.4, neck: 0.35, head: 0.72, tail: 2.7, headType: 'anky', armor: true, club: true, speed: [1.2, 2.6], hp: 4, cry: 'bellow',
+    pal: [{ dark: '#4a3a1f', base: '#9a7f3f', belly: '#d7c48e', stripe: '#33270f', crest: '#bfa569' }] },
+  quetzal: Object.assign({}, SPECIES.ptera, { name: 'Quetzalcoatlus', span: 6.5, speed: [6, 9], hp: 2, sizeR: [1.5, 1.8],
+    pal: [{ dark: '#26405e', base: '#5a86ad', belly: '#e4e8e0', stripe: '#3c5f82', wing: '#3f6f9c', crest: '#e8742c' }] }),
+  compy: Object.assign({}, SPECIES.raptor, { base: 'raptor', name: 'Compsognathus', hp: 1, speed: [6, 10], tint: 0x6fbf3a, tintK: 0.45, sizeR: [0.7, 0.9] }),
+});
+// colour morphs: individuals of a species do not all look alike (null = natural colour)
+SPECIES.raptor.morphs = [null, [0x3d7a3a, 0.35], [0x8a3a22, 0.35]];
+SPECIES.trike.morphs = [null, [0x5b6f8a, 0.3], [0x9a7a3a, 0.3]];
+SPECIES.stego.morphs = [null, [0x8a5a2a, 0.3], [0x4a7a6a, 0.3]];
+
 /* ---------------- visibility: rim light, lighter fog, lifted shadows ---------------- */
 export const DINO_LOOK = { rim: { value: 0.4 }, rimColor: { value: new THREE.Color(0xfff0d6) }, fog: { value: 0.6 }, lift: { value: 0.07 } };
+const tintCache = new Map();
+function tinted(m, tint, k) { // shared per material + colour, so morphs add no extra materials per spawn
+  const key = m.uuid + '|' + tint + '|' + k; let c = tintCache.get(key);
+  if (!c) { c = m.clone(); c.userData.dinoLook = false; if (c.color) c.color.lerp(new THREE.Color(tint), k); tintCache.set(key, c); }
+  return c;
+}
+const crestCache = new Map();
+function crestMat(col) { let c = crestCache.get(col); if (!c) { c = new THREE.MeshStandardMaterial({ color: col, roughness: 0.65, side: THREE.DoubleSide }); crestCache.set(col, c); } return c; }
 function dinoLook(m) {
   if (m.userData.dinoLook) return m; m.userData.dinoLook = true;
   m.onBeforeCompile = sh => {
@@ -146,17 +175,26 @@ function buildHead(D, hp, sp, skin, h) {
     eye(hp, 0.27 * h, 0.12 * h, 0.35 * h, 0.06 * h); eye(hp, -0.27 * h, 0.12 * h, 0.35 * h, 0.06 * h);
     return head;
   }
-  if (type === 'stego' || type === 'apato') {
+  if (type === 'stego' || type === 'apato' || type === 'para' || type === 'pachy' || type === 'anky') {
     mesh(tube([[0, 0, -0.3 * h, 0.3 * h, 0.28 * h], [0, 0.04 * h, 0.2 * h, 0.32 * h, 0.3 * h], [0, -0.02 * h, 0.7 * h, 0.2 * h, 0.2 * h], [0, -0.08 * h, 1.0 * h, 0.04 * h]]), skin, hp, 'head');
     head.jaw = pivot(hp, 0, -0.16 * h, 0); mesh(tube([[0, 0, -0.1 * h, 0.12 * h, 0.2 * h], [0, -0.02 * h, 0.5 * h, 0.1 * h, 0.16 * h], [0, 0, 0.9 * h, 0.03 * h]]), skin, head.jaw, 'head');
     eye(hp, 0.25 * h, 0.12 * h, 0.15 * h, 0.07 * h); eye(hp, -0.25 * h, 0.12 * h, 0.15 * h, 0.07 * h);
+    if (type === 'para') mesh(tube([[0, 0.18 * h, -0.05 * h, 0.13 * h, 0.08 * h], [0, 0.5 * h, -0.55 * h, 0.14 * h, 0.09 * h], [0, 0.78 * h, -1.15 * h, 0.11 * h, 0.07 * h], [0, 0.86 * h, -1.6 * h, 0.03 * h]], 8, 3), crestMat(sp.pal[0].crest), hp, 'head');
+    if (type === 'pachy') {
+      const dome = mesh(new THREE.SphereGeometry(0.44 * h, 14, 10), crestMat(sp.pal[0].crest), hp, 'head'); dome.position.set(0, 0.3 * h, -0.08 * h); dome.scale.set(1, 0.9, 1.1);
+      const kn = []; for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2, g = new THREE.ConeGeometry(0.05 * h, 0.17 * h, 5); g.translate(Math.cos(a) * 0.43 * h, 0.14 * h, -0.08 * h + Math.sin(a) * 0.47 * h); kn.push(g); }
+      mesh(mergeG(kn), m.horn, hp, 'head').castShadow = false;
+    }
+    if (type === 'anky') for (const s of [-1, 1]) cone(0.08 * h, 0.34 * h, m.horn, hp, s * 0.28 * h, 0.04 * h, -0.15 * h, -0.4, -s * 1.1, 'head');
     return head;
   }
   // theropod skulls
-  const long = type === 'spino' ? 1.45 : 1, deep = type === 'rex' ? 1.25 : type === 'spino' ? 0.7 : 0.9, wide = type === 'rex' ? 1.15 : 0.8;
+  const long = type === 'spino' ? 1.45 : type === 'carno' ? 0.85 : type === 'dilo' ? 1.2 : 1, deep = type === 'rex' ? 1.25 : type === 'carno' ? 1.15 : type === 'spino' ? 0.7 : type === 'dilo' ? 0.75 : 0.9, wide = type === 'rex' ? 1.15 : type === 'carno' ? 1 : type === 'dilo' ? 0.7 : 0.8;
   mesh(tube([[0, 0.08 * h, -0.22 * h, 0.3 * h * deep, 0.3 * h * wide], [0, 0.12 * h * deep, 0.15 * h, 0.36 * h * deep, 0.32 * h * wide], [0, 0.06 * h * deep, 0.55 * h * long, 0.25 * h * deep, 0.22 * h * wide], [0, 0, 0.92 * h * long, 0.16 * h * deep, 0.15 * h * wide], [0, -0.04 * h, 1.04 * h * long, 0.05 * h]]), skin, hp, 'head');
   if (type === 'spino') { const cr = mesh(tube([[0, 0.25 * h, 0.1 * h, 0.06 * h, 0.03 * h], [0, 0.32 * h, 0.35 * h, 0.08 * h, 0.03 * h], [0, 0.2 * h, 0.6 * h, 0.03 * h]]), skin, hp, 'head'); void cr; }
   if (type === 'rex') { mesh(tube([[0.2 * h, 0.36 * h, 0.12 * h, 0.06 * h], [0.18 * h, 0.4 * h, 0.28 * h, 0.07 * h], [0.16 * h, 0.3 * h, 0.45 * h, 0.03 * h]]), skin, hp, 'head'); mesh(tube([[-0.2 * h, 0.36 * h, 0.12 * h, 0.06 * h], [-0.18 * h, 0.4 * h, 0.28 * h, 0.07 * h], [-0.16 * h, 0.3 * h, 0.45 * h, 0.03 * h]]), skin, hp, 'head'); }
+  if (type === 'carno') for (const s of [-1, 1]) cone(0.08 * h, 0.52 * h, m.horn, hp, s * 0.22 * h, 0.38 * h * deep, 0.1 * h, 0.15, -s * 0.75, 'head');
+  if (type === 'dilo') for (const s of [-1, 1]) { const c = membrane([[-0.25 * h, 0], [-0.1 * h, 0.4 * h], [0.25 * h, 0.36 * h], [0.62 * h, 0.1 * h], [0.62 * h, 0]], crestMat(sp.pal[0].crest), hp, 'head'); c.rotation.y = -Math.PI / 2; c.rotation.z = s * 0.14; c.position.set(s * 0.13 * h, 0.2 * h, 0.2 * h); }
   // upper teeth
   const tg = []; const nT = type === 'spino' ? 14 : 9;
   for (let i = 0; i < nT; i++) { const z = (0.12 + i / nT * 0.8) * h * long; for (const s of [-1, 1]) { const g = new THREE.ConeGeometry(0.035 * h, 0.12 * h * (type === 'rex' ? 1.3 : 1), 5); g.rotateX(Math.PI); g.translate(s * (0.2 - i / nT * 0.08) * h * wide, -0.12 * h * deep, z); tg.push(g); } }
@@ -232,15 +270,20 @@ function buildQuad(D, sp, skin) {
       const top = 0.32 * b + Math.exp(-Math.pow((t - 0.4) / 0.5, 2)) * b * 0.95 + sh * t * 0.5;
       for (const s of [-1, 1]) { const p = membrane([[-hgt * 0.45, 0], [-hgt * 0.35, hgt * 0.7], [0, hgt], [hgt * 0.38, hgt * 0.7], [hgt * 0.45, 0]], pm, body, 'body'); p.rotation.y = Math.PI / 2; p.rotation.z = s * 0.12; p.position.set(s * 0.08 * b, top, z + s * 0.12 * bl * 0.15); } }
   }
+  if (sp.armor) { // bony studs over the back, long spikes down the flanks
+    const st = []; for (let i = 0; i < 8; i++) { const zz = lerp(-0.42 * bl, 0.5 * bl, i / 7); for (const a of [-1.42, -0.95, -0.5, 0, 0.5, 0.95, 1.42]) { const edge = Math.abs(a) > 1.3, h2 = (edge ? 0.62 : 0.3) * b, g = new THREE.ConeGeometry((edge ? 0.14 : 0.17) * b, h2, 6); g.translate(0, h2 / 2, 0); g.rotateZ(-a); g.translate(Math.sin(a) * 0.86 * b, 0.3 * b + Math.cos(a) * 0.92 * b, zz); st.push(g); } }
+    mesh(mergeG(st), crestMat(sp.pal[0].crest), body, 'body').castShadow = false;
+  }
   D.tail = []; let par = body, z = -0.42 * bl, r0 = 0.62 * b; const segs = [0.36, 0.34, 0.3];
   for (let i = 0; i < 3; i++) { const p = pivot(par, 0, i ? 0 : 0.1 * b, z); const L = sp.tail * segs[i], r1 = i === 2 ? 0.03 : r0 * 0.55;
     mesh(tube([[0, 0, 0.12 * b, r0, r0 * 0.9], [0, -0.05 * b, -L * 0.5, (r0 + r1) / 2], [0, -0.12 * b, -L, r1]], 12, 3), skin, p, 'body'); D.tail.push(p); par = p; z = -L; r0 = r1; }
   if (sp.plates) { const t = D.tail[2]; for (const s of [-1, 1]) for (const zz of [-0.4, -0.7]) cone(0.06 * b, 0.7 * b, m.horn, t, s * 0.05, 0.05, zz * sp.tail * 0.3, 0.3, s * 1.1); }
+  if (sp.club) { const cl = mesh(new THREE.SphereGeometry(0.44 * b, 10, 8), crestMat(sp.pal[0].crest), D.tail[2], 'body'); cl.position.set(0, -0.12 * b, -sp.tail * 0.3); cl.scale.set(1.3, 0.72, 1); }
   // neck + head
   const nk = pivot(body, 0, sh + (sp.longNeck ? 0.3 * b : 0), bl * 0.62); D.neck = nk;
   let hp;
   if (sp.longNeck) { const N = sp.neck; mesh(tube([[0, 0, 0, 0.55 * b, 0.5 * b], [0, N * 0.35, N * 0.35, 0.35 * b, 0.3 * b], [0, N * 0.72, N * 0.55, 0.22 * b, 0.2 * b], [0, N * 0.95, N * 0.62, 0.17 * b, 0.15 * b]], 12, 4), skin, nk, 'head'); hp = pivot(nk, 0, N * 0.95, N * 0.62); }
-  else { const N = sp.neck; mesh(tube([[0, 0, -0.1, 0.55 * b, 0.5 * b], [0, -0.05 * b, N * 0.6, 0.42 * b, 0.4 * b], [0, -0.1 * b, N, 0.3 * b]], 12, 3), skin, nk, 'body'); hp = pivot(nk, 0, -0.1 * b, N * 0.9); }
+  else { const N = sp.neck, up = (sp.neckUp || 0) * N; mesh(tube([[0, 0, -0.1, 0.55 * b, 0.5 * b], [0, -0.05 * b + up * 0.6, N * 0.6, 0.42 * b, 0.4 * b], [0, -0.1 * b + up, N, 0.3 * b]], 12, 3), skin, nk, 'body'); hp = pivot(nk, 0, -0.1 * b + up, N * 0.9); }
   D.head = buildHead(D, hp, sp, skin, sp.head); D.headPivot = hp; if (!sp.longNeck) hp.rotation.x = 0.25;
   // legs: rear pair + front pair
   D.legs = [];
@@ -265,7 +308,7 @@ function buildFlyer(D, sp, skin) {
   const crest = membrane([[0, 0], [-0.7, 0.18], [-0.05, 0.14]], cm, hp, 'head'); crest.rotation.y = -Math.PI / 2; crest.position.set(0, 0.06, 0);
   eye(hp, 0.08, 0.06, 0.12, 0.03); eye(hp, -0.08, 0.06, 0.12, 0.03);
   D.head = { pivot: hp, jaw: pivot(hp, 0, -0.04, 0.1) }; mesh(tube([[0, 0, 0, 0.04, 0.05], [0, -0.01, 0.4, 0.025, 0.03], [0, 0, 0.8, 0.01]], 8, 2), skin, D.head.jaw, 'head');
-  const wm = new THREE.MeshStandardMaterial({ map: skinTex('wing', { dark: pal.wing, base: pal.wing, belly: pal.belly, stripe: pal.dark }, { stripes: 8 }).map, roughness: 0.8, side: THREE.DoubleSide, transparent: false });
+  const wm = new THREE.MeshStandardMaterial({ map: skinTex('wing' + sp.name, { dark: pal.wing, base: pal.wing, belly: pal.belly, stripe: pal.dark }, { stripes: 8 }).map, roughness: 0.8, side: THREE.DoubleSide, transparent: false });
   D.wings = []; const half = sp.span / 2;
   for (const s of [-1, 1]) {
     const w = pivot(body, s * 0.12, 0.08, 0.25);
@@ -342,7 +385,8 @@ export class Dino {
     const base = sp.base || kind, pack = PACK[base];
     if (pack && sp.type !== 'flyer') this.fromPack(pack); else this.procedural(opts.variant || 0);
     this.root.scale.setScalar(this.size);
-    if (sp.tint) { const tc = new THREE.Color(sp.tint); this.root.traverse(o => { if (o.isMesh && o.material) { const tm = m => { const c = m.clone(); if (c.color) c.color.lerp(tc, sp.tintK || 0.4); return c; }; o.material = Array.isArray(o.material) ? o.material.map(tm) : tm(o.material); } }); }
+    const tn = sp.tint != null ? [sp.tint, sp.tintK || 0.4] : sp.morphs ? sp.morphs[(opts.variant || 0) % sp.morphs.length] : null;
+    if (tn) { const tm = m => tinted(m, tn[0], tn[1]); this.root.traverse(o => { if (o.isMesh && o.material) o.material = Array.isArray(o.material) ? o.material.map(tm) : tm(o.material); }); }
     this.root.traverse(o => { if (o.isMesh && o !== this.blob) { if (Array.isArray(o.material)) o.material.forEach(dinoLook); else if (o.material && o.material.isMeshStandardMaterial) dinoLook(o.material); } });
     this.hitMeshes = []; this.root.traverse(o => { if (o.isMesh) { o.userData.dino = this; if (!o.userData.part) o.userData.part = 'body'; this.hitMeshes.push(o); } });
     // soft contact shadow so the animal looks planted even in shade
