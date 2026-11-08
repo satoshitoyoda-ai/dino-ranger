@@ -207,11 +207,18 @@ function idb() { return dbP || (dbP = new Promise((res, rej) => { const r = inde
 async function store(mode, fn) { const d = await idb(); return new Promise((res, rej) => { const t = d.transaction('lines', mode); fn(t.objectStore('lines')); t.oncomplete = () => res(); t.onerror = () => rej(t.error); }); }
 export async function loadRecordings() {
   try { const d = await idb(); await new Promise(res => { const c = d.transaction('lines', 'readonly').objectStore('lines').openCursor(); c.onsuccess = () => { const cur = c.result; if (cur) { REC[cur.key] = { blob: cur.value }; cur.continue(); } else res(); }; c.onerror = () => res(); }); } catch (e) {}
+  await Promise.all(LINES.map(([k]) => builtin(k)));
   return REC;
 }
+// built-in ranger voice (voice/<key>.mp3, made with a neural voice) fills any line without a grown-up's recording
+async function builtin(k) {
+  if (REC[k]) return;
+  try { const r = await fetch('voice/' + k + '.mp3'); if (r.ok) { const blob = await r.blob(); if (!REC[k]) REC[k] = { blob, builtin: true }; } } catch (e) {}
+}
 export function hasRec(k) { return !!REC[k]; }
+export function isMine(k) { return !!REC[k] && !REC[k].builtin; }
 export async function saveRec(k, blob) { REC[k] = { blob }; try { await store('readwrite', s => s.put(blob, k)); } catch (e) {} }
-export async function delRec(k) { delete REC[k]; try { await store('readwrite', s => s.delete(k)); } catch (e) {} }
+export async function delRec(k) { delete REC[k]; try { await store('readwrite', s => s.delete(k)); } catch (e) {} await builtin(k); }
 let recSrc = null;
 async function recBuf(k) {
   const r = REC[k]; if (!r || !AC) return null;

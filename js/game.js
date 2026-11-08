@@ -7,9 +7,9 @@ import { Dino, SPECIES, loadPack, PACK, DINO_LOOK } from './dinos.js';
 import { Cockpit, makeDart } from './rifle.js';
 import { FX } from './fx.js';
 import { Convoy } from './convoy.js';
-import { audioBind, audioInit, sfx, cry, say, musicStart, musicStop, audioTick, ambOff, AC, setRain, englishVoices, resetVoice, LINES, loadRecordings, hasRec, saveRec, delRec, playRec, stopRec, startRecording, stopRecording, recording } from './audio.js';
+import { audioBind, audioInit, sfx, cry, say, musicStart, musicStop, audioTick, ambOff, AC, setRain, englishVoices, resetVoice, LINES, loadRecordings, hasRec, isMine, saveRec, delRec, playRec, stopRec, startRecording, stopRecording, recording } from './audio.js';
 
-export const VERSION = '3.19.0';
+export const VERSION = '3.19.1';
 
 /* ================= settings (this device only) ================= */
 const SKEY = 'dinoRanger.v1';
@@ -800,12 +800,12 @@ function openVoice() { G.state = 'voice'; musicStop(); drawVoice(); show('voice'
 function drawVoice() {
   const box = $('vlist'); box.innerHTML = '';
   for (const [k, label, hint] of LINES) {
-    const row = document.createElement('div'); row.className = 'vrow' + (hasRec(k) ? ' has' : '') + (recKey === k ? ' rec' : '');
-    row.innerHTML = '<div class="vt"><b>' + (hasRec(k) ? '✅ ' : '') + label + '</b><i>e.g. “' + hint + '”</i></div>';
+    const row = document.createElement('div'); row.className = 'vrow' + (isMine(k) ? ' has' : '') + (recKey === k ? ' rec' : '');
+    row.innerHTML = '<div class="vt"><b>' + (isMine(k) ? '✅ ' : '') + label + '</b><i>' + (isMine(k) ? 'Your voice' : hasRec(k) ? 'Built-in ranger: “' + hint + '”' : 'e.g. “' + hint + '”') + '</i></div>';
     const mk = (txt, cls, fn, off) => { const b = document.createElement('button'); b.type = 'button'; b.className = cls; b.textContent = txt; b.disabled = !!off; b.addEventListener('click', e => { e.preventDefault(); fn(); }); row.appendChild(b); };
     mk(recKey === k ? '■ Stop' : '● Record', 'vrec', () => toggleRec(k), recKey && recKey !== k);
     mk('▶', 'vplay', () => { audioInit(); playRec(k); }, !hasRec(k) || recKey);
-    mk('🗑', 'vdel', () => { delRec(k).then(drawVoice); }, !hasRec(k) || recKey);
+    mk('🗑', 'vdel', () => { delRec(k).then(drawVoice); }, !isMine(k) || recKey);
     box.appendChild(row);
   }
 }
