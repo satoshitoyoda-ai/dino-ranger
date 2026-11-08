@@ -125,6 +125,48 @@
   #rotate.on { display: flex; }
   #rotate .ipad { width: 110px; height: 150px; border: 10px solid #fff; border-radius: 22px; animation: turn 2s ease-in-out infinite; }
   @keyframes turn { 0%, 30% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }
+  /* ---------- phones held sideways: everything scaled to a short screen ---------- */
+  @media (max-height: 520px) {
+    #loading { gap: 14px; } #loading .lt { font-size: 38px; -webkit-text-stroke: 2px #2E2A1E; } #loading .lb { width: 240px; height: 16px; border-width: 3px; } #loading .lw { font-size: 14px; }
+    .screen { gap: 10px; overflow-y: auto; touch-action: pan-y; }
+    .logo { margin-top: 0; } .logo .t1 { font-size: min(17vh, 66px); -webkit-text-stroke: 3px #2E2A1E; } .logo .t2 { font-size: min(6vh, 20px); letter-spacing: 5px; margin-top: 6px; padding: 3px 14px; border-width: 2px; }
+    .xl { width: 112px; height: 112px; } .lg { width: 84px; height: 84px; } .md { width: 60px; height: 60px; }
+    .btn, .btn.khaki, .btn.slate { border-width: 3px; }
+    .btn { box-shadow: 0 5px 0 #9C5520, 0 8px 12px rgba(0,0,0,.3); } .btn.khaki { box-shadow: 0 5px 0 #7E6A3C, 0 8px 12px rgba(0,0,0,.3); } .btn.slate { box-shadow: 0 5px 0 #4A5E68, 0 8px 12px rgba(0,0,0,.3); }
+    .row { gap: 26px; } #bRecords span { font-size: 40px !important; }
+    #bPause { width: 56px; height: 56px; border-width: 3px; top: calc(8px + env(safe-area-inset-top)); right: calc(8px + env(safe-area-inset-right)); }
+    #weapons { gap: 6px; left: calc(8px + env(safe-area-inset-left)); bottom: calc(8px + env(safe-area-inset-bottom)); }
+    #weapons button { width: 48px; height: 48px; font-size: 24px; border-width: 3px; } #weapons button.sel { transform: scale(1.08); box-shadow: 0 0 0 3px rgba(255,255,255,.7); }
+    #bGear { width: 50px; height: 50px; top: calc(8px + env(safe-area-inset-top)); right: calc(8px + env(safe-area-inset-right)); } #bGear span { width: 40px; height: 40px; font-size: 22px; }
+    .card { padding: 10px 24px; gap: 6px; border-radius: 18px; border-width: 3px; box-shadow: 0 6px 0 #8A7A50, 0 10px 18px rgba(0,0,0,.3); }
+    .bigemoji { font-size: 52px; } .lname { font-size: 28px !important; }
+    .dots { gap: 10px; } .dots i { width: 18px; height: 18px; border-width: 3px; }
+    .starbig { font-size: 48px; gap: 8px; } .starbig svg { width: 56px; height: 56px; }
+    .stats { font-size: 17px; gap: 10px; } .stats i { font-size: 13px; } .best { font-size: 18px; } .iwx { font-size: 18px; }
+    #clear, #end, #over, #rest { flex-direction: row; gap: 28px; }
+    .fhead { font-size: 22px; gap: 8px; letter-spacing: 1px; }
+    #rBack, #cBack, #fBack { width: 48px; height: 48px; top: calc(6px + env(safe-area-inset-top)); left: calc(6px + env(safe-area-inset-left)); }
+    #courses { gap: 5px; justify-content: flex-start; } #courses .fhead { margin-top: auto; } #clist { margin-bottom: auto; gap: 7px; }
+    .course { display: flex; align-items: center; gap: 8px; padding: 5px 9px 8px; border-width: 3px; border-radius: 16px; box-shadow: 0 5px 0 #8A7A50; }
+    .chead { font-size: 13px; margin: 0; width: 66px; text-align: center; line-height: 1.15; }
+    .lrow { gap: 7px; }
+    .lvl { width: clamp(96px, 17vw, 158px); height: 62px; border-width: 3px; border-radius: 12px; box-shadow: 0 4px 0 #8A7A50; gap: 1px; }
+    .lvl .ln { width: 20px; height: 20px; font-size: 12px; top: 3px; left: 4px; border-width: 2px; } .lvl .le { font-size: 26px; } .lvl .lt { font-size: 12px; white-space: nowrap; } .lvl .lb { font-size: 11px; top: 4px; right: 5px; }
+    #guide, #records { padding-top: 8px; }
+    #fgrid { grid-template-columns: repeat(3, min(180px, 25vw)); gap: 10px; margin-top: 2px; padding-bottom: 16px; }
+    .fcard { width: min(180px, 25vw); height: 132px; border-width: 3px; border-radius: 14px; box-shadow: 0 4px 0 #8A7A50; }
+    .fcard canvas { width: calc(100% - 12px); height: auto; } .fcard b { font-size: 12px; bottom: 3px; right: 8px; } .fcard i { font-size: 11px; bottom: 3px; left: 8px; }
+    #rlist { font-size: 14px; } #rlist td, #rlist th { padding: 3px 8px; } #rlist .bests { font-size: 12px; gap: 3px 12px; margin-top: 6px; }
+    #parent .card, #voice .card { width: min(640px, 80vw); max-height: 94vh; padding: 10px 18px; font-size: 15px; gap: 5px; }
+    #parent h2, #voice h2 { font-size: 19px; } #parent .tip, #voice .tip { font-size: 12.5px; margin: 2px 0; }
+    #parent label { padding: 4px 0; } #parent input[type=checkbox] { width: 24px; height: 24px; flex: none; }
+    #parent select, #parent input[type=text] { font-size: 16px; padding: 3px 6px; max-width: 52%; }
+    #pVoiceName { max-width: 150px !important; } #parent label > span { max-width: 62%; }
+    #parent .pbtns button, #voice .pbtns button { padding: 9px 16px; font-size: 16px; }
+    .vrow { padding: 4px 0; gap: 6px; } .vrow .vt i { font-size: 12px; } .vrow button { padding: 7px 9px; font-size: 15px; min-width: 42px; } .vrow .vrec { min-width: 84px; }
+    #rotate { font-size: 24px; gap: 14px; }
+  }
+  .rtip { font-size: 18px; font-weight: 600; color: #D9CBA3; text-align: center; max-width: 80vw; }
 </style>
 </head>
 <body>
@@ -212,7 +254,7 @@
 <div id="voice" class="screen">
   <div class="card">
     <h2>🎙 Ranger lines in your voice</h2>
-    <p class="tip">Tap <b>● Record</b>, say the line (the example, or anything you like), then <b>■ Stop</b>. Your recording plays instead of the built-in ranger voice at that moment in the game. Recordings stay on this iPad only. Tap ▶ to hear a line; 🗑 removes your recording and brings the built-in ranger back.</p>
+    <p class="tip">Tap <b>● Record</b>, say the line (the example, or anything you like), then <b>■ Stop</b>. Your recording plays instead of the built-in ranger voice at that moment in the game. Recordings stay on this device only. Tap ▶ to hear a line; 🗑 removes your recording and brings the built-in ranger back.</p>
     <div id="vlist"></div>
     <p class="tip" id="vMsg"></p>
     <div class="pbtns"><span></span><button id="vDone" class="ok">Done</button></div>
@@ -231,20 +273,21 @@
     <label>Music <input type="checkbox" id="pMusic"></label>
     <label>Spoken ranger radio <input type="checkbox" id="pVoice"></label>
     <label>Radio voice <span style="display:flex;gap:8px;align-items:center"><select id="pVoiceName" style="max-width:300px"></select><button id="pVoiceTest" type="button" style="padding:6px 12px;border-radius:10px;background:#D9CBA3;font-weight:700">Test</button></span></label>
-    <p class="tip"><b>Most natural voice on iPad:</b> Settings &rarr; Accessibility &rarr; Read &amp; Speak (or Spoken Content) &rarr; Voices &rarr; English &rarr; download a <b>Premium</b> or <b>Enhanced</b> voice (e.g. Ava, Zoe, Evan, Nathan). Then reopen the game and pick it here (Auto picks the best one).</p>
+    <p class="tip"><b>Most natural voice on iPhone or iPad:</b> Settings &rarr; Accessibility &rarr; Read &amp; Speak (or Spoken Content) &rarr; Voices &rarr; English &rarr; download a <b>Premium</b> or <b>Enhanced</b> voice (e.g. Ava, Zoe, Evan, Nathan). Then reopen the game and pick it here (Auto picks the best one).</p>
     <label>Your own voice for the ranger <button id="pRecord" type="button" style="padding:8px 14px;border-radius:12px;background:#E8873A;color:#fff;font-weight:800">🎙 Record lines</button></label>
     <label>Missions per day <select id="pRides"><option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="0">No limit</option></select></label>
     <label>Child's name (spoken only) <input type="text" id="pName" maxlength="20" autocomplete="off"></label>
     <p class="tip" id="pStat"></p>
     <p class="tip">Aiming is exact: darts hit where you tap (Easy adds a small helper ring; Normal has none). Head hits count double. With Blood splash off, darts only put dinosaurs to sleep (they snore) and nothing bleeds. The name, stars and settings stay on this iPad only. No accounts, ads or internet calls.</p>
-    <p class="tip"><b>Lock the iPad to this game:</b> Settings → Accessibility → Guided Access → On (set a passcode). In the game, triple-click the top button → Options → Time Limit.</p>
+    <p class="tip"><b>Lock the iPhone or iPad to this game:</b> Settings → Accessibility → Guided Access → On (set a passcode). In the game, triple-click the side or top button → Options → Time Limit.</p>
     <div class="pbtns"><button id="pReset">Reset today's missions</button><button id="pDone" class="ok">Done</button></div>
     <p class="tip" id="pVer"></p>
   </div>
 </div>
 
 <div id="errBox" style="display:none;position:fixed;left:8px;bottom:8px;right:8px;z-index:50;background:rgba(120,0,0,.85);color:#fff;font:14px system-ui;padding:8px 12px;border-radius:8px"></div>
-<div id="rotate"><div class="ipad"></div><div>↻</div></div>
+<div id="rotate"><div class="ipad"></div><div>↻</div><div class="rtip">Turn the screen sideways to play. If it will not turn, switch off Rotation Lock.</div></div>
+<div id="safe" style="position:fixed;left:0;top:0;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top) 0 0 env(safe-area-inset-left)"></div>
 
 <script>
   // module scripts need http(s); if opened as a file, say how to test on the PC

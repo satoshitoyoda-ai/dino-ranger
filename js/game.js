@@ -9,7 +9,7 @@ import { FX } from './fx.js';
 import { Convoy } from './convoy.js';
 import { audioBind, audioInit, sfx, cry, say, musicStart, musicStop, audioTick, ambOff, AC, setRain, englishVoices, resetVoice, LINES, loadRecordings, hasRec, isMine, saveRec, delRec, playRec, stopRec, startRecording, stopRecording, recording } from './audio.js';
 
-export const VERSION = '3.20.0';
+export const VERSION = '3.21.0';
 
 /* ================= settings (this device only) ================= */
 const SKEY = 'dinoRanger.v1';
@@ -65,18 +65,24 @@ const renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true, powerPre
 renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;
-let PR = Math.min(window.devicePixelRatio || 1, isTouch ? 1.3 : 1.75);
-const world = new World(renderer); world.setShadowSize(isTouch ? 1024 : 2048); if (isTouch) world.quality = 0.75;
+const isPhone = isTouch && Math.min(screen.width, screen.height) < 500;   // iPhones: tiny bright screen, less memory
+const MIN_PR = isPhone ? 1 : 0.75;
+let PR = Math.min(window.devicePixelRatio || 1, isPhone ? 1.5 : isTouch ? 1.3 : 1.75);
+const world = new World(renderer); world.setShadowSize(isPhone ? 768 : isTouch ? 1024 : 2048); if (isTouch) world.quality = isPhone ? 0.6 : 0.75;
 const scene = world.scene;
 const camera = new THREE.PerspectiveCamera(60, 1, 0.05, 1400); scene.add(camera);
 const cockpit = new Cockpit(camera);
 const fx = new FX(scene);
 const convoy = new Convoy(scene);   // Ranger Two's jeep
-let W = 0, H = 0;
+let W = 0, H = 0, U = 1;              // U: scale of the score panels (smaller on a phone held sideways)
+const SAFE = { l: 0, t: 0 };           // notch / Dynamic Island inset, so the panels stay on the visible screen
 function resize() {
   W = window.innerWidth; H = window.innerHeight;
   renderer.setPixelRatio(PR); renderer.setSize(W, H, false);
-  camera.aspect = W / H; camera.fov = W / H < 1.3 ? 66 : 60; G.baseFov = camera.fov; camera.updateProjectionMatrix();
+  U = H < 520 ? clamp(H / 620, 0.55, 1) : 1;
+  { const cs = getComputedStyle($('safe')); SAFE.l = parseFloat(cs.paddingLeft) || 0; SAFE.t = parseFloat(cs.paddingTop) || 0; }
+  // a wide phone screen shows more jungle and smaller dinosaurs: tighten the view so they stay big enough to tap
+  camera.aspect = W / H; camera.fov = W / H < 1.3 ? 66 : H < 520 ? 50 : 60; G.baseFov = camera.fov; camera.updateProjectionMatrix();
   const dpr = Math.min(window.devicePixelRatio || 1, 2); hud.width = Math.round(W * dpr); hud.height = Math.round(H * dpr); hx.setTransform(dpr, 0, 0, dpr, 0, 0);
   fx.setScale(H * PR); checkOrient();
 }
@@ -188,7 +194,7 @@ function castAt(x, y, objs) { ndc.set(x / W * 2 - 1, -(y / H) * 2 + 1); ray.setF
 function pickHit(x, y) {
   const objs = liveTargets(); if (!objs.length) return null;
   let h = castAt(x, y, objs); if (h) return h;
-  const A = D().assist; if (!A) return null;          // Normal: exact hits only
+  const A = D().assist * (H < 520 ? 1.4 : 1); if (!A) return null;          // Normal: exact hits only
   for (const r of [A * 0.5, A]) for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2; h = castAt(x + Math.cos(a) * r, y + Math.sin(a) * r, objs); if (h) return h; }
   return null;
 }
@@ -249,7 +255,7 @@ function dartArrive(dt) {
   stickDart(d, hit.obj, hit.local, dir); stat('hits'); if (hit.head) stat('heads');
   damage(d, w.dmg * (hit.head ? (d.boss ? 1.5 : 2) : 1) * (d.boss ? BOSS_ARMOR : 1), wp, dir, hit.head, w.small ? 0.6 : 1);
 }
-function buzz(ms) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} }   // phones only; iPad Safari has no web vibration
+function buzz(ms) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} }   // Android only; Safari on iPhone and iPad has no web vibration
 function mark(wp, big) { const p = toScreen(wp); if (p.ok) G.marks.push({ x: p.x, y: p.y, t: 0, big }); }
 function damage(d, dmg, wp, dir, head, fxK = 1) {
   sfx.thunk(head);
@@ -667,9 +673,10 @@ function drawHUD() {
   for (const m of G.marks) { const a = 1 - m.t / 0.22, r = (m.big ? 16 : 10) + m.t * 40; hx.globalAlpha = Math.max(0, a); hx.lineWidth = m.big ? 5 : 3.5; hx.strokeStyle = m.big ? '#ff4030' : '#ffffff'; hx.beginPath();
     for (const [sx, sy] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) { hx.moveTo(m.x + sx * r * 0.45, m.y + sy * r * 0.45); hx.lineTo(m.x + sx * r, m.y + sy * r); } hx.stroke(); hx.globalAlpha = 1; }
   for (const p of G.pops) { const a = clamp(1 - p.t / 0.9, 0, 1); hx.globalAlpha = a; hx.font = '900 34px system-ui, sans-serif'; hx.textAlign = 'center'; hx.lineWidth = 6; hx.strokeStyle = '#2E2A1E'; hx.strokeText(p.text, p.x, p.y - p.t * 50); hx.fillStyle = '#F2C14E'; hx.fillText(p.text, p.x, p.y - p.t * 50); hx.globalAlpha = 1; hx.textAlign = 'start'; }
-  for (const s of G.stars) { const u = clamp(s.t / s.dur, 0, 1), e = u * u * (3 - 2 * u), tx = 60, ty = 52, cx = (s.sx + tx) / 2, cy = Math.min(s.sy, ty) - 120;
+  for (const s of G.stars) { const u = clamp(s.t / s.dur, 0, 1), e = u * u * (3 - 2 * u), tx = SAFE.l + 60 * U, ty = SAFE.t + 52 * U, cx = (s.sx + tx) / 2, cy = Math.min(s.sy, ty) - 120;
     starShape((1 - e) * (1 - e) * s.sx + 2 * (1 - e) * e * cx + e * e * tx, (1 - e) * (1 - e) * s.sy + 2 * (1 - e) * e * cy + e * e * ty, 22 - u * 6, '#F2C14E', '#2E2A1E'); }
   if (!['play', 'paused', 'clear', 'intro'].includes(G.state)) return;
+  hx.save(); hx.translate(SAFE.l, SAFE.t); hx.scale(U, U);
   hx.fillStyle = 'rgba(243,235,211,0.92)'; rr(14, 14, 176, 78, 18); hx.fill(); hx.lineWidth = 4; hx.strokeStyle = '#2E2A1E'; hx.stroke();
   hx.save(); hx.translate(60, 53); const bb = 1 + G.hudBump * 0.35; hx.scale(bb, bb); starShape(0, 0, 26, '#F2C14E', '#2E2A1E'); hx.restore();
   hx.fillStyle = '#2E2A1E'; hx.font = '900 44px system-ui, sans-serif'; hx.textBaseline = 'middle'; hx.fillText(String(G.score), 98, 55);
@@ -678,9 +685,9 @@ function drawHUD() {
     hx.font = '22px system-ui, sans-serif'; hx.fillText('🚙', 22 + sh, 118);
     hx.fillStyle = '#5a4a34'; rr(56 + sh, 108, 124, 18, 8); hx.fill();
     hx.fillStyle = e > 0.5 ? '#6DBE45' : e > 0.25 ? '#E8B83A' : '#D9472B'; if (e > 0) { rr(56 + sh, 108, Math.max(14, 124 * e), 18, 8); hx.fill(); } }
-  const cx = W / 2, y = 52;
+  const Wu = (W - 2 * SAFE.l) / U, cx = Wu / 2, y = 52;
   if (G.phase === 'ride' && world.env) {
-    const w = Math.min(420, W * 0.36), u = clamp(G.s / world.env.len, 0, 1);
+    const w = Math.min(420, Wu * 0.36), u = clamp(G.s / world.env.len, 0, 1);
     hx.fillStyle = 'rgba(243,235,211,0.85)'; rr(cx - w / 2 - 12, y - 17, w + 24, 34, 10); hx.fill(); hx.lineWidth = 3; hx.strokeStyle = '#2E2A1E'; hx.stroke();
     hx.fillStyle = '#E8873A'; rr(cx - w / 2 - 5, y - 10, (w + 10) * u + 4, 20, 6); hx.fill();
     hx.fillStyle = '#F3EBD3'; hx.beginPath(); hx.arc(cx + w / 2 + 18, y, 28, 0, 7); hx.fill(); hx.stroke();
@@ -688,11 +695,12 @@ function drawHUD() {
     hx.fillStyle = '#4E5B30'; hx.strokeStyle = '#2E2A1E'; hx.lineWidth = 3; rr(cx - w / 2 + w * u - 16, y - 11, 32, 22, 6); hx.fill(); hx.stroke();
     hx.font = '30px system-ui, sans-serif'; hx.textAlign = 'center'; hx.fillText(wxIcon(world.wxKind || 'clear', G.level) || '☀️', cx - w / 2 - 38, y + 2); hx.textAlign = 'start';
   } else if (G.boss) {
-    const w = Math.min(460, W * 0.4), u = clamp(G.boss.fed / G.boss.hp, 0, 1);
+    const w = Math.min(460, Wu * 0.4), u = clamp(G.boss.fed / G.boss.hp, 0, 1);
     hx.fillStyle = 'rgba(243,235,211,0.9)'; rr(cx - w / 2 - 12, y - 20, w + 24, 40, 12); hx.fill(); hx.lineWidth = 3; hx.strokeStyle = '#2E2A1E'; hx.stroke();
     const bg = hx.createLinearGradient(cx - w / 2, 0, cx + w / 2, 0); bg.addColorStop(0, '#7FD0FF'); bg.addColorStop(1, '#3A6FD6'); hx.fillStyle = bg; rr(cx - w / 2 - 4, y - 12, (w + 8) * u + 4, 24, 8); hx.fill();
     hx.font = '900 30px system-ui, sans-serif'; hx.fillStyle = '#2E2A1E'; hx.fillText('💤', cx + w / 2 + 20, y + 2);
   }
+  hx.restore();
 }
 
 /* ================= loop & adaptive quality ================= */
@@ -710,7 +718,7 @@ function frame(dt) {
   drawHUD();
   // keep ~60 fps on the iPad: drop resolution step by step if frames are slow
   G.fpsT += dt; G.fpsN++;
-  if (G.fpsT > 2) { G.fps = G.fpsN / G.fpsT; G.fpsT = 0; G.fpsN = 0; if (G.state === 'play' && G.fps < 48 && PR > 0.75) { PR = Math.max(0.75, PR - 0.15); resize(); } }
+  if (G.fpsT > 2) { G.fps = G.fpsN / G.fpsT; G.fpsT = 0; G.fpsN = 0; if (G.state === 'play' && G.fps < 48 && PR > MIN_PR) { PR = Math.max(MIN_PR, PR - 0.15); resize(); } }
 }
 
 /* ================= input ================= */
@@ -725,7 +733,7 @@ const up = e => G.pointers.delete(e.pointerId);
 cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up); cv.addEventListener('lostpointercapture', up);
 document.addEventListener('pointerdown', audioInit, true);
 ['gesturestart', 'gesturechange', 'contextmenu', 'dblclick', 'selectstart'].forEach(ev => document.addEventListener(ev, e => e.preventDefault()));
-document.addEventListener('touchmove', e => { if (!e.target.closest('#guide, #parent .card, #records')) e.preventDefault(); }, { passive: false });
+document.addEventListener('touchmove', e => { if (!e.target.closest('#guide, #parent .card, #voice .card, #records, #courses')) e.preventDefault(); }, { passive: false });
 function tapBtn(id, fn) { $(id).addEventListener('click', e => { e.preventDefault(); audioInit(); sfx.ui(); fn(); }); }
 tapBtn('bPlay', openCourses); tapBtn('cBack', () => { G.state = 'title'; show('title'); }); tapBtn('bPause', pauseGame); tapBtn('bResume', resumeGame);
 tapBtn('bNext', () => startLevel(G.level + 1));
@@ -816,7 +824,7 @@ function drawVoice() {
 }
 async function toggleRec(k) {
   audioInit();
-  if (recKey === k) { clearTimeout(recTimer); const b = await stopRecording(); recKey = null; if (b) { await saveRec(k, b); playRec(k); } else $('vMsg').textContent = 'Nothing was recorded. Try again, a little closer to the iPad.'; drawVoice(); return; }
+  if (recKey === k) { clearTimeout(recTimer); const b = await stopRecording(); recKey = null; if (b) { await saveRec(k, b); playRec(k); } else $('vMsg').textContent = 'Nothing was recorded. Try again, a little closer to the microphone.'; drawVoice(); return; }
   if (recKey || recording()) return;
   stopRec(); if (window.speechSynthesis) speechSynthesis.cancel();
   try { await startRecording(); } catch (e) { $('vMsg').textContent = 'The microphone is not available. Allow it for this site in Settings → Safari → Microphone (or the address-bar ⓘ), then try again.'; return; }

@@ -2,9 +2,9 @@
 
 An original dinosaur ride game in the arcade light-gun style, now in real 3D. Ride an open jeep along a winding, hilly jungle track through three missions. Dinosaurs walk, sprint and charge out of the jungle, and some leap or lunge at the jeep and bite (the screen shakes and the jeep bumps). You **tap to fire darts** from a big first-person rifle. Each mission ends with a giant: Triceratops, Spinosaurus, then T. rex.
 
-## Put it on the iPad (works offline, full screen)
+## Put it on the iPad or iPhone (works offline, full screen)
 1. Publish once to GitHub Pages: `bash deploy.sh "v3"`. Do this **only with Satoshi's OK**. It needs an empty public repo `dino-ranger` cloned to `C:\Users\satos\dev\dino-ranger`, with Pages turned on.
-2. On the iPad, open `https://satoshitoyoda-ai.github.io/dino-ranger/` in **Safari** → Share → **Add to Home Screen**.
+2. On the iPad or iPhone, open `https://satoshitoyoda-ai.github.io/dino-ranger/` in **Safari** → Share → **Add to Home Screen**.
 3. Open it once from the Home Screen while online. The service worker caches the game, three.js and any 3D models; after that it works offline.
 4. Optional: Settings → Accessibility → **Guided Access** → On. In the game, triple-click the top button → Options → Time Limit.
 
@@ -65,3 +65,4 @@ Bump `VERSION` in `sw.js` and `js/game.js`, then run `deploy.sh` (only with Sato
 - **v3.19:** third course Far Frontier (Moonlight Jungle, Lagoon Shore, Frozen Peaks; bosses Shadow Rex, giant Spinosaurus, Frost Horn); random weather shown on the intro card and never the same start twice in a row on a scene; grown-ups can record their own voice for 10 ranger moments (stored on the device only).
 - **v3.19.1:** a built-in ranger voice for all 10 moments (`voice/*.mp3`, made with a Microsoft neural voice, cached offline). A grown-up's own recording still wins; 🗑 brings the built-in clip back.
 - **v3.20:** more dinosaurs in every course (shorter gaps, higher on-screen limit) and 7 new species (Compsognathus, Dilophosaurus, Pachycephalosaurus, Carnotaurus, Parasaurolophus, Ankylosaurus, Quetzalcoatlus) plus colour morphs of Raptor, Triceratops and Stegosaurus. The Field Guide now has 13 entries.
+- **v3.21:** iPhone support (landscape). Every screen, button and score panel is resized for short screens, panels stay clear of the notch, the view is tightened so dinosaurs stay big enough to tap, and graphics are lightened on phones.
