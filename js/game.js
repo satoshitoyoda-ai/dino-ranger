@@ -9,7 +9,7 @@ import { FX } from './fx.js';
 import { Convoy } from './convoy.js';
 import { audioBind, audioInit, sfx, cry, say, musicStart, musicStop, audioTick, ambOff, AC, setRain, englishVoices, resetVoice, LINES, loadRecordings, hasRec, isMine, saveRec, delRec, playRec, stopRec, startRecording, stopRecording, recording } from './audio.js';
 
-export const VERSION = '3.21.0';
+export const VERSION = '3.22.0';
 
 /* ================= settings (this device only) ================= */
 const SKEY = 'dinoRanger.v1';
@@ -525,8 +525,8 @@ const WX_SAY_SNOW = { rain: "It's starting to snow, ranger!", fog: 'Fog is rolli
 const WX_SAY = { rain: "It's starting to rain, ranger!", fog: 'Fog is rolling in. Watch closely!', storm: 'A thunderstorm! Hold on tight!', clear: 'The sky is clearing up!' };
 const WX_ICON = { clear: '☀️', rain: '🌧️', fog: '🌫️', storm: '⛈️' };
 const SNOWY = i => i === 8;
-const wxName = (k, i) => i === 6 && k === 'clear' ? 'Clear night' : SNOWY(i) ? ({ clear: 'Sunny', rain: 'Snow', fog: 'Fog', storm: 'Blizzard' })[k] : ({ clear: 'Sunny', rain: 'Rain', fog: 'Fog', storm: 'Thunderstorm' })[k];
-const wxIcon = (k, i) => i === 6 && k === 'clear' ? '🌙' : SNOWY(i) ? ({ clear: '☀️', rain: '🌨️', fog: '🌫️', storm: '❄️' })[k] : WX_ICON[k];
+const wxName = (k, i) => i === 6 && k === 'clear' ? 'Clear night' : i === 8 && k === 'clear' ? 'Northern lights' : SNOWY(i) ? ({ clear: 'Sunny', rain: 'Snow', fog: 'Fog', storm: 'Blizzard' })[k] : ({ clear: 'Sunny', rain: 'Rain', fog: 'Fog', storm: 'Thunderstorm' })[k];
+const wxIcon = (k, i) => i === 6 && k === 'clear' ? '🌙' : i === 8 && k === 'clear' ? '🌌' : SNOWY(i) ? ({ clear: '☀️', rain: '🌨️', fog: '🌫️', storm: '❄️' })[k] : WX_ICON[k];
 function chooseWeather(i) {
   const pref = S.weather || 'random';
   if (pref !== 'random') return [pref];
@@ -718,7 +718,7 @@ function frame(dt) {
   drawHUD();
   // keep ~60 fps on the iPad: drop resolution step by step if frames are slow
   G.fpsT += dt; G.fpsN++;
-  if (G.fpsT > 2) { G.fps = G.fpsN / G.fpsT; G.fpsT = 0; G.fpsN = 0; if (G.state === 'play' && G.fps < 48 && PR > MIN_PR) { PR = Math.max(MIN_PR, PR - 0.15); resize(); } }
+  if (G.fpsT > 2) { G.fps = G.fpsN / G.fpsT; G.fpsT = 0; G.fpsN = 0; if (G.state === 'play' && G.fps < 48) { if (PR > MIN_PR) { PR = Math.max(MIN_PR, PR - 0.15); resize(); } else if (G.fps < 42) world.shed(); } }
 }
 
 /* ================= input ================= */

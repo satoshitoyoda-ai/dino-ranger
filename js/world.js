@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { clamp, lerp, smooth, fbm, vnoise, rng, canvasTex, detailTexture, radialTex } from './util.js';
 import { jeepModel } from './convoy.js';
+import * as Sc from './scenery.js';
 
 export const ENV = [
   { // Fern Valley: sunny jungle valley
@@ -55,9 +56,9 @@ export const ENV = [
     veg: { broad: 80, palm: 340, fern: 380, grass: 900, rock: 120, dead: 0 }, motes: 0xffffff,
   },
   { // Frozen Peaks: snowy pass between icy mountains, falling snow
-    seed: 103, len: 440, trees: { n: 2, k: 1.4, near: 0.8, giants: 6 }, curve: [[10, 50, 0.4], [4, 20, 2.4]], hills: [[3.0, 46, 0.2], [1.2, 18, 1.4]], snow: true,
-    skyTop: 0x7aa2cc, skyHor: 0xe4ecf4, fog: 0xd8e2ec, fogNear: 22, fogFar: 175, sunDir: [0.45, 0.5, 0.4], sunCol: 0xf4f8ff, sunI: 2.6,
-    hemiSky: 0xe6eeff, hemiGround: 0x7e8a96, hemiI: 1.25, grass: [0xc4ced6, 0xe2e9ee], dirt: 0x8a8580, rock: 0x666a72, leaf: [0x1c3628, 0x2a4a36], bark: 0x3a2e24, mtn: 0xc6d2de,
+    seed: 103, len: 440, trees: { n: 2, k: 1.4, near: 0.8, giants: 6 }, curve: [[10, 50, 0.4], [4, 20, 2.4]], hills: [[3.0, 46, 0.2], [1.2, 18, 1.4]], snow: true, twilight: true,
+    skyTop: 0x101c4a, skyHor: 0x4a7a9c, fog: 0x6d8ba8, fogNear: 26, fogFar: 210, sunDir: [0.45, 0.5, 0.4], sunCol: 0xa8c0ff, sunI: 2.0,
+    hemiSky: 0xa8c8ff, hemiGround: 0x7e8a96, hemiI: 1.75, grass: [0xc4ced6, 0xe2e9ee], dirt: 0x8a8580, rock: 0x666a72, leaf: [0x1c3628, 0x2a4a36], bark: 0x3a2e24, mtn: 0x4e5d78,
     veg: { broad: 150, palm: 0, fern: 0, grass: 260, rock: 220, dead: 90 }, motes: 0xffffff,
   },
 ];
@@ -95,7 +96,10 @@ export class World {
     const rg = new THREE.BufferGeometry(); rg.setAttribute('position', new THREE.BufferAttribute(rp, 3));
     this.rain = new THREE.LineSegments(rg, new THREE.LineBasicMaterial({ color: 0xc8d4dc, transparent: true, opacity: 0, depthWrite: false }));
     this.rain.frustumCulled = false; this.rain.visible = false; this.scene.add(this.rain);
+    this.lite = false; this.tick = 0;
   }
+  // slow device: thin out the costliest extras (called when resolution has already dropped as far as it can)
+  shed() { if (this.lite) return; this.lite = true; this.sun.shadow.autoUpdate = false; this.sun.shadow.needsUpdate = true; if (this.beams) this.beams.visible = false; }
   setWeather(kind, instant) { this.wxT = Object.assign({}, WEATHER[kind] || WEATHER.clear); this.wxKind = kind; if (instant) Object.assign(this.wx, this.wxT); }
   setShadowSize(n) { this.sun.shadow.mapSize.set(n, n); if (this.sun.shadow.map) { this.sun.shadow.map.dispose(); this.sun.shadow.map = null; } }
 
@@ -137,16 +141,22 @@ export class World {
     const E = this.env = ENV[i];
     this.trees = Object.assign({ n: 1, k: 1, near: 1, giants: 0 }, E.trees);   // dense jungle on the jungle missions (v3.6)
     this.root = new THREE.Group(); this.scene.add(this.root);
+    this.beams = this.fallTex = this.lavaTex = this.auroraMat = this.skyObjs = null; this.shrooms = null;
     this.scene.fog = new THREE.Fog(E.fog, E.fogNear, E.fogFar);
     this.scene.background = new THREE.Color(E.fog);
     this.hemi.color.set(E.hemiSky); this.hemi.groundColor.set(E.hemiGround); this.hemi.intensity = E.hemiI * 0.6;
     this.sun.color.set(E.sunCol); this.sun.intensity = E.sunI * 0.75;
     this.sunDir = new THREE.Vector3(...E.sunDir).normalize();
-    this.base = { sunI: this.sun.intensity, hemiI: this.hemi.intensity, fog: new THREE.Color(E.fog), top: new THREE.Color(E.skyTop), hor: new THREE.Color(E.skyHor) };
+    this.base = Object.assign({ sunI: this.sun.intensity, hemiI: this.hemi.intensity, fog: new THREE.Color(E.fog), top: new THREE.Color(E.skyTop), hor: new THREE.Color(E.skyHor) }, Sc.cloudColors(E));
     this.buildSky(); this.buildTerrain(); this.planRuins(); this.buildVeg(); this.buildRuins();
     if (E.river || E.swamp) this.buildWater();
     if (E.volcano) this.buildVolcano();
     this.buildMotes();
+    Sc.buildRoad(this); Sc.buildBeams(this);
+    if (E.river && !E.lagoon) Sc.buildFalls(this);
+    if (E.volcano) Sc.buildLava(this);
+    if (E.night) Sc.buildNight(this, this.shrooms);
+    if (E.twilight) Sc.buildAurora(this);
     // image-based lighting from the sky so PBR materials pick up the mood
     const envScene = new THREE.Scene(); envScene.add(this.sky.clone());
     if (this.envRT) this.envRT.dispose();
@@ -164,28 +174,14 @@ export class World {
     const E = this.env;
     const mat = new THREE.ShaderMaterial({
       side: THREE.BackSide, depthWrite: false, fog: false,
-      uniforms: { top: { value: new THREE.Color(E.skyTop) }, hor: { value: new THREE.Color(E.skyHor) }, sunDir: { value: this.sunDir }, sunCol: { value: new THREE.Color(E.sunCol) }, fogc: { value: new THREE.Color(E.fog) } },
+      uniforms: { top: { value: new THREE.Color(E.skyTop) }, hor: { value: new THREE.Color(E.skyHor) }, sunDir: { value: this.sunDir }, sunCol: { value: new THREE.Color(E.sunCol) }, fogc: { value: new THREE.Color(E.fog) }, cl: { value: Sc.cloudMap() }, t: { value: 0 }, cover: { value: 0 }, glow: { value: E.night || E.twilight ? 0 : 1 }, lit: { value: this.base.lit.clone() }, dark: { value: this.base.dark.clone() } },
       vertexShader: 'varying vec3 vD; void main(){ vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); gl_Position.z = gl_Position.w; }',
-      fragmentShader: `uniform vec3 top, hor, sunCol, fogc; uniform vec3 sunDir; varying vec3 vD;
-        void main(){ float h = vD.y; vec3 c = mix(hor, top, pow(clamp(h,0.,1.),0.55)); c = mix(c, fogc, smoothstep(0.08,-0.05,h));
-          float sd = max(dot(normalize(vD), normalize(sunDir)), 0.); c += sunCol * (pow(sd, 900.) * 3.0 + pow(sd, 18.) * 0.35 + pow(sd, 4.) * 0.12);
-          float cl = sin(vD.x*9.+vD.z*3.)*sin(vD.z*11.-vD.x*2.)*0.5+0.5; c = mix(c, vec3(1.0,0.98,0.95), smoothstep(0.62,0.95,cl)*smoothstep(0.05,0.25,h)*smoothstep(0.6,0.3,h)*0.35);
-          gl_FragColor = vec4(c,1.0); }`,
+      fragmentShader: Sc.SKY_FRAG,
     });
     this.sky = new THREE.Mesh(new THREE.SphereGeometry(900, 32, 16), mat); this.sky.renderOrder = -10; this.sky.frustumCulled = false;
     this.root.add(this.sky);
-    // distant mountain ring (hazy, never reached)
-    const N = 160, pos = [], col = [], idx = [], c0 = new THREE.Color(E.mtn), c1 = new THREE.Color(E.fog), r = rng(E.seed);
-    for (let i = 0; i <= N; i++) {
-      const a = i / N * Math.PI * 2, hgt = 40 + fbm(i * 0.08, E.seed, 4) * 160 + (r() - 0.5) * 6;
-      const R = 760;
-      pos.push(Math.cos(a) * R, -40, Math.sin(a) * R, Math.cos(a) * R, hgt, Math.sin(a) * R);
-      col.push(c1.r, c1.g, c1.b, c0.r, c0.g, c0.b);
-      if (i < N) { const k = i * 2; idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); }
-    }
-    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.setIndex(idx);
-    this.mtn = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, fog: false, side: THREE.DoubleSide, depthWrite: false })); this.mtn.renderOrder = -9; this.mtn.frustumCulled = false;
-    this.root.add(this.mtn);
+    // distant mountain ranges (hazy, never reached)
+    this.mtn = Sc.ridges(E); this.root.add(this.mtn);
   }
 
   buildTerrain() {
@@ -267,7 +263,7 @@ export class World {
     for (let i = 0; i < N; i++) { pos[i * 3] = (r() - 0.5) * 60; pos[i * 3 + 1] = r() * 14; pos[i * 3 + 2] = (r() - 0.5) * 60; }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     const tex = radialTex([[0, 'rgba(255,255,255,1)'], [0.4, 'rgba(255,255,255,0.5)'], [1, 'rgba(255,255,255,0)']], 32);
-    this.motes = new THREE.Points(g, new THREE.PointsMaterial({ color: this.env.motes, size: this.env.volcano || this.env.night ? 0.16 : this.env.snow ? 0.12 : 0.09, map: tex, transparent: true, opacity: 0.75, depthWrite: false, blending: THREE.AdditiveBlending }));
+    this.motes = new THREE.Points(g, new THREE.PointsMaterial({ color: this.env.motes, size: this.env.volcano ? 0.3 : this.env.night ? 0.3 : this.env.snow ? 0.12 : 0.09, map: tex, transparent: true, opacity: 0.75, depthWrite: false, blending: THREE.AdditiveBlending }));
     this.motes.frustumCulled = false; this.root.add(this.motes);
   }
 
@@ -284,7 +280,7 @@ export class World {
       V.broadTrunk = mergeGeometries([ensure(trunk), ensure(roots)]); V.broadTrunk.computeVertexNormals();
       const blobs = []; const r = rng(3);
       const B = [[0, 0, 0, 2.6], [-1.9, -0.4, 0.6, 1.9], [1.8, -0.3, -0.5, 2.0], [0.4, 0.9, 1.6, 1.8], [-0.6, 0.7, -1.7, 1.9], [0.2, 1.6, 0.1, 1.7], [2.4, -1.0, 1.4, 1.3], [-2.3, -0.9, -1.5, 1.3]];
-      for (const [x, y, z, s] of B) { const g = new THREE.IcosahedronGeometry(s, 1); const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const k = 1 + (vnoise(p.getX(i) * 1.7 + x * 3, p.getY(i) * 1.7 + p.getZ(i)) - 0.5) * 0.45; p.setXYZ(i, p.getX(i) * k, p.getY(i) * k * 0.8, p.getZ(i) * k); } g.translate(x, y + 9.6, z); blobs.push(ensure(g)); }
+      for (const [x, y, z, s] of B) { const g = new THREE.IcosahedronGeometry(s * 0.74, 0); const p = g.attributes.position; for (let i = 0; i < p.count; i++) { const k = 1 + (vnoise(p.getX(i) * 1.7 + x * 3, p.getY(i) * 1.7 + p.getZ(i)) - 0.5) * 0.45; p.setXYZ(i, p.getX(i) * k, p.getY(i) * k * 0.8, p.getZ(i) * k); } g.translate(x * 0.74, y * 0.72 + 9.6, z * 0.74); blobs.push(ensure(g)); }
       V.broadCrown = mergeGeometries(blobs); V.broadCrown.computeVertexNormals();
       shade(V.broadCrown, (x, y) => 0.55 + 0.45 * clamp((y - 7.4) / 4, 0, 1)); }
     // frond (shared by palms, tree ferns, ground ferns): bent strip with a leaf alpha texture
@@ -327,12 +323,20 @@ export class World {
   }
   buildVeg() {
     const E = this.env, V = this.vegGeoms(), leafT = this.leafTex(), r = rng(E.seed * 7), q = this.quality * E.len / 310;
-    const bark = new THREE.MeshStandardMaterial({ color: E.bark, roughness: 0.95, map: this.detail });
+    const bark = new THREE.MeshStandardMaterial({ color: new THREE.Color(E.bark).multiplyScalar(1.7), roughness: 0.95, map: Sc.barkTex() });
     const leafA = new THREE.Color(E.leaf[0]), leafB = new THREE.Color(E.leaf[1]);
     const crownM = this.swayMat(new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.85, map: this.detail }), 0.006);
     const frondM = this.swayMat(new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, map: leafT, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.8 }), 0.025);
     const grassM = this.swayMat(new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, map: this._grassTex, alphaTest: 0.4, side: THREE.DoubleSide, roughness: 0.9 }), 0.12);
     const rockM = new THREE.MeshStandardMaterial({ color: E.rock, vertexColors: true, roughness: 0.9, map: this.detail });
+    // light both sides of a leaf card the same way, otherwise the far side of a crown turns black
+    const soft = (m, key) => { const prev = m.onBeforeCompile; m.onBeforeCompile = (sh, rr) => { prev(sh, rr); sh.fragmentShader = sh.fragmentShader.replace('#include <normal_fragment_begin>', THREE.ShaderChunk.normal_fragment_begin.replace('float faceDirection = gl_FrontFacing ? 1.0 : - 1.0;', 'float faceDirection = 1.0;')); }; m.customProgramCacheKey = () => key; return m; };
+    const cardM = this.swayMat(new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, map: Sc.clumpTex(), alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.82 }), 0.008);
+    if (E.snow) { const p = cardM.onBeforeCompile; cardM.onBeforeCompile = (sh, rr) => { p(sh, rr); sh.vertexShader = 'varying float vUpN;\n' + sh.vertexShader.replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\n vUpN = objectNormal.y;'); sh.fragmentShader = 'varying float vUpN;\n' + sh.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\n diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.92,0.95,1.0), smoothstep(0.1, 0.62, vUpN));'); }; }
+    soft(cardM, 'cards' + !!E.snow);
+    const earM = soft(this.swayMat(new THREE.MeshStandardMaterial({ map: Sc.earTex(), side: THREE.DoubleSide, roughness: 0.55 }), 0.03), 'ear');
+    const flowerM = soft(this.swayMat(new THREE.MeshStandardMaterial({ map: Sc.flowerTex(), alphaTest: 0.45, side: THREE.DoubleSide, roughness: 0.8 }), 0.05), 'flower');
+    const rb = rng(E.seed * 3 + 2), blooms = (E.night || E.snow || E.canyon || E.volcano) ? [] : [0xf07aa8, 0xf4c440, 0xf07a3c, 0xc78af0];
     const deadM = new THREE.MeshStandardMaterial({ color: 0x3a322c, roughness: 1 });
     const place = (n, minD, maxD, opts = {}) => { const out = []; let tries = 0;
       while (out.length < n && tries++ < n * 8) {
@@ -340,8 +344,9 @@ export class World {
         const z = -s, x = this.xr(s) + side * d, h = this.height(x, z);
         if ((E.river || E.swamp) && h < E.waterY + 0.25 && !opts.water) continue;
         if (opts.side && side !== opts.side) continue;
+        if (opts.clump && fbm(x * 0.09 + 4, z * 0.09, 2) < opts.clump) continue;
         if (this.ruinSpots && !opts.water && this.ruinSpots.some(q => (q.x - x) ** 2 + (q.z - z) ** 2 < q.r * q.r)) continue;
-        out.push([x, h, z]); }
+        out.push([x, (opts.snap ? this.ground(x, z) : h) + (opts.lift || 0), z]); }
       return out; };
     // instanced meshes are split into 40 m chunks along the track so frustum + distance culling can skip them
     this.vegMeshes = [];
@@ -360,7 +365,8 @@ export class World {
     const leafCol = c => c.copy(leafA).lerp(leafB, r()).multiplyScalar(0.85 + r() * 0.3);
     const v = E.veg;
     const TR = this.trees, tk = TR.k, tn = TR.n * q;
-    const broadP = [{ geo: V.broadTrunk, mat: bark, cast: true }, { geo: V.broadCrown, mat: crownM, cast: true, color: leafCol }];
+    const vines = !E.snow && !E.canyon && !E.plains, cardCol = c => { c.copy(leafA).lerp(leafB, rb()).multiplyScalar((0.85 + rb() * 0.3) * 1.5); if (blooms.length && rb() < 0.13) c.set(blooms[Math.floor(rb() * blooms.length)]).multiplyScalar(1.05); return c; };
+    const broadP = [{ geo: V.broadTrunk, mat: bark, cast: true }, { geo: V.broadCrown, mat: crownM, cast: true, color: c => leafCol(c).multiplyScalar(0.42) }, { geo: Sc.cardGeo(vines), mat: cardM, cast: this.quality >= 1, color: cardCol }];
     if (v.broad) inst(broadP, place(Math.round(v.broad * tn), 9 * TR.near, 120, { pow: 1.6 }), [0.8 * tk, 1.35 * tk], 0.06);
     if (v.broad && TR.giants) inst(broadP, place(Math.round(TR.giants * q), 14, 70, { pow: 1.2 }), [2.2, 2.9], 0.04);   // emergent giants
     if (v.palm) inst([{ geo: V.palmTrunk, mat: bark, cast: true }, { geo: V.palmCrown, mat: frondM, cast: true, color: c => c.copy(leafA).lerp(leafB, r()).multiplyScalar(0.9 + r() * 0.4) }], place(Math.round(v.palm * tn), 6.5 * TR.near, 90, { pow: 1.5 }), [0.7 * tk, 1.3 * tk], 0.05);
@@ -368,17 +374,32 @@ export class World {
     if (v.grass) inst([{ geo: V.grass, mat: grassM, color: c => c.set(E.grass[1]).lerp(new THREE.Color(E.grass[0]), r() * 0.7).multiplyScalar(1.15) }], place(Math.round(v.grass * q), 3.7, 30, { pow: 2 }), [0.8, 1.5]);
     if (v.rock) { inst([{ geo: V.rock, mat: rockM, cast: true }], place(Math.round(v.rock * 0.7), 4.5, 70, { water: true }), [0.4, 1.4], 0.5); inst([{ geo: V.rock, mat: rockM, cast: true }], place(Math.round(v.rock * 0.3), 14, 90, { water: true }), [2.0, 4.5], 0.5); }
     if (v.dead) inst([{ geo: V.dead, mat: deadM, cast: true }], place(v.dead, 6, 80), [0.8, 1.4]);
+    // ground dressing: pebbles on the verge, drifts of flowers, fallen logs, big-leaf plants
+    const qa = this.quality;
+    inst([{ geo: Sc.pebbleGeo(), mat: rockM, color: c => c.setScalar(0.8 + r() * 0.5) }], place(Math.round(420 * qa), 2.4, 7, { pow: 1.3, snap: true }), [0.07, 0.3], 0.8);
+    if (!E.snow && !E.volcano && !E.night) inst([{ geo: Sc.flowerGeo(E.canyon), mat: flowerM }], place(Math.round((E.canyon ? 90 : 340) * qa), 4.6, 22, { pow: 1.5, clump: 0.42, snap: true }), [0.9, 1.5], 0);
+    if (!E.canyon && !E.plains) inst([{ geo: Sc.logGeo(), mat: new THREE.MeshStandardMaterial({ color: E.bark, roughness: 1, map: this.detail }), cast: true, color: c => c.set(0xffffff).lerp(new THREE.Color(0x6f8a4a), r() * 0.5) }], place(Math.round(34 * qa), 5, 24, { snap: true, lift: 0.3 }), [0.8, 1.4], 0.12);
+    if (v.broad > 100 && !E.snow) inst([{ geo: Sc.earGeo(), mat: earM, color: c => c.copy(leafB).lerp(leafA, r() * 0.8).multiplyScalar(1.5) }], place(Math.round(300 * qa), 5.5, 24, { pow: 1.5, snap: true }), [0.8, 1.4], 0.1);
+    // signature props
+    if (E.volcano) inst([{ geo: Sc.pebbleGeo(), mat: new THREE.MeshStandardMaterial({ color: 0x2a2526, roughness: 0.95, map: this.detail }), cast: true }], place(Math.round(90 * qa), 6, 26, { snap: true }), [0.5, 1.8], 0.6);
+    if (E.night) { const pts = place(Math.round(240 * qa), 3.6, 18, { pow: 1.2, snap: true }); this.shrooms = pts; inst([{ geo: Sc.mushroomGeo(), mat: new THREE.MeshStandardMaterial({ color: 0x0f4a60, emissive: 0x12a8d0, emissiveIntensity: 0.85, roughness: 0.5 }) }], pts, [0.5, 1.25], 0.2); }
+    if (E.twilight) inst([{ geo: Sc.iceGeo(), mat: new THREE.MeshStandardMaterial({ color: 0x8fd4ff, emissive: 0x2a78c8, emissiveIntensity: 0.65, roughness: 0.12, metalness: 0.15, envMapIntensity: 2.2 }), cast: true }], place(Math.round(70 * qa), 6.5, 28, { pow: 1.1, snap: true }), [0.35, 1.0], 0.25);
   }
 
   updWeather(dt, cam) {
     const w = this.wx, t = this.wxT, k = Math.min(1, dt * 0.35), B = this.base, E = this.env; if (!B) return;
     for (const key in t) w[key] += (t[key] - w[key]) * k;
-    const gray = new THREE.Color(E.night ? 0x2a3242 : E.snow ? 0xb8c2cc : 0x7d8790), dark = w.dark;
+    const gray = new THREE.Color(E.night ? 0x2a3242 : E.snow ? 0x56687e : 0x7d8790), dark = w.dark;
     this.scene.fog.far = Math.max(45, E.fogFar * w.fogK); this.scene.fog.near = Math.min(E.fogNear, this.scene.fog.far * 0.12 + 4);
     this.scene.fog.color.copy(B.fog).lerp(gray, dark * 0.75); this.scene.background.copy(this.scene.fog.color);
     const u = this.sky.material.uniforms; u.top.value.copy(B.top).lerp(gray, dark * 0.85); u.hor.value.copy(B.hor).lerp(gray, dark * 0.8); u.fogc.value.copy(this.scene.fog.color);
     u.sunCol.value.set(E.sunCol).multiplyScalar(1 - dark * 0.95);
-    this.mtn.material.color.setScalar(1 - dark * 0.45);
+    u.lit.value.copy(B.lit).lerp(gray, dark * 0.85); u.dark.value.copy(B.dark).lerp(gray, dark * 0.9).multiplyScalar(1 - dark * 0.25); u.cover.value = dark * 0.22;
+    { const m = this.mtn.material.uniforms; m.shade.value = 1 - dark * 0.45; m.haze.value = clamp(1 - w.fogK, 0, 1) * 0.9; m.fogc.value.copy(this.scene.fog.color); }
+    { const vis = clamp((w.fogK - 0.3) / 0.7, 0, 1) * (1 - dark);   // moon, stars and northern lights fade behind weather
+      if (this.skyObjs) for (const o of this.skyObjs) o.material.opacity = vis;
+      if (this.auroraMat) this.auroraMat.uniforms.vis.value = vis;
+      if (this.beams) this.beams.material.opacity = clamp(1 - dark * 1.5, 0, 1); }
     // lightning in storms
     if (w.storm > 0.6 && !E.snow && (this.boltT -= dt) <= 0) { this.boltT = 5 + Math.random() * 7; this.lightning = 1; if (this.onLightning) this.onLightning(); }
     this.lightning = Math.max(0, this.lightning - dt * 3.5);
@@ -471,6 +492,11 @@ export class World {
   update(dt, cam) {
     this.time += dt; this.windU.value = this.time;
     if (!this.root) return;
+    if (this.lite && (this.tick++ & 1) === 0) this.sun.shadow.needsUpdate = true;   // slow device: shadows every other frame
+    this.sky.material.uniforms.t.value = this.time;
+    if (this.fallTex) this.fallTex.offset.y += dt * 0.9;
+    if (this.lavaTex) this.lavaTex.offset.y -= dt * 0.06;
+    if (this.auroraMat) this.auroraMat.uniforms.t.value = this.time * 0.25;
     this.sky.position.copy(cam.position); this.mtn.position.set(cam.position.x, 0, cam.position.z);
     // sun + shadow box follow the jeep
     const f = tmpV.set(0, 0, -1).applyQuaternion(cam.quaternion); f.y = 0; f.normalize();
@@ -479,7 +505,7 @@ export class World {
     this.updWeather(dt, cam);
     if (this.vegMeshes) { const far = this.scene.fog.far + 25; for (const m of this.vegMeshes) { const bs = m.boundingSphere; m.visible = bs.center.distanceTo(cam.position) - bs.radius < far; } }
     if (this.water) { this.waterMat.normalMap.offset.y -= dt * 0.03; this.waterMat.normalMap.offset.x += dt * 0.004; }
-    if (this.volcano) { this.volcano.position.x = cam.position.x - 170; this.volcano.position.z = cam.position.z - 620;
+    if (this.volcano) { this.volcano.position.x = cam.position.x - 60; this.volcano.position.z = cam.position.z - 600;
       for (const s of this.smoke) { const u = (s.userData.u + this.time * 0.02) % 1; s.position.set(u * 120 + Math.sin(u * 9) * 8, 175 + u * 260, 0); const k = 40 + u * 160; s.scale.set(k, k, 1); s.material.opacity = 0.75 * (1 - u); } }
     if (this.motes) { this.motes.position.set(cam.position.x, cam.position.y - 3, cam.position.z);
       const p = this.motes.geometry.attributes.position; for (let i = 0; i < p.count; i++) { let y = p.getY(i) + dt * (this.env.volcano ? 0.6 : this.env.snow ? -1.1 : this.env.night ? Math.sin(this.time * 1.3 + i) * 0.5 : 0.12); if (y > 14) y = 0; if (y < 0) y = 14; p.setY(i, y); p.setX(i, p.getX(i) + Math.sin(this.time + i) * dt * 0.2); } p.needsUpdate = true; }
