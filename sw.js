@@ -1,11 +1,13 @@
 // Offline cache. Bump VERSION on every release so devices pick up the new files.
-const VERSION = 'dino-ranger-v3.22.0';
+const VERSION = 'dino-ranger-v3.22.1';
 const FILES = ['./', './index.html', './manifest.json', './icon-180.png', './icon-192.png', './icon-512.png',
   './js/game.js', './js/world.js', './js/dinos.js', './js/rifle.js', './js/fx.js', './js/audio.js', './js/util.js', './js/convoy.js', './js/scenery.js',
   './lib/three.module.js', './lib/three.core.js', './lib/addons/loaders/GLTFLoader.js', './lib/addons/utils/BufferGeometryUtils.js', './lib/addons/utils/SkeletonUtils.js',
   './lib/addons/loaders/FBXLoader.js', './lib/addons/libs/fflate.module.js', './lib/addons/curves/NURBSCurve.js', './lib/addons/curves/NURBSUtils.js',
-  './models/models.json',
-  ...['start', 'boss', 'angry', 'down', 'hurt', 'weather', 'complete', 'over', 'pick', 'sleep'].map(k => './voice/' + k + '.mp3')];
+  './models/models.json'];
+// voice/*.mp3 is not listed: the published game has no voice/ folder, and one missing file makes addAll
+// fail, so offline mode never installed. If voice clips are published later, the fetch handler below
+// keeps them for offline use the first time the game plays them.
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION).then(async c => {
     await c.addAll(FILES);
@@ -18,7 +20,8 @@ self.addEventListener('install', e => {
   }).then(() => self.skipWaiting()));
 });
 self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== VERSION).map(k => caches.delete(k))))
+  // Delete only this game's old caches. Other games on the same site (same origin) keep theirs.
+  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== VERSION && k.startsWith('dino-ranger-')).map(k => caches.delete(k))))
     .then(() => self.clients.claim()));
 });
 self.addEventListener('fetch', e => {
